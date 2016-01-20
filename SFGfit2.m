@@ -24,10 +24,13 @@ updateInterface();
         
         % Create View Modes that are shown in the listbox in the view
         % control panel
-        data.spectraData = { };
+        data.spectraData.DataSet = struct([]);
         
         % Print output to command window?
         data.doPrint = true;
+        
+        % Add smoothed line to spectrum
+        data.smoothed = true;
         
         % Define Laser bandwidth
         data.laserBandwidth = 4.5;
@@ -139,7 +142,9 @@ updateInterface();
             'Style', 'listbox', ...
             'FontName', data.MonoFont, ...
             'String', 'no data', ...
-            'Callback', @onDataSelect);
+            'Callback', @onDataSelect, ...
+            'Min', 0, ...
+            'Max', 2);
         
         infoPanel = uix.BoxPanel( 'Parent', rightContainer, ...
             'Title', 'Infos' );
@@ -370,29 +375,69 @@ updateInterface();
         
         value = get(gui.Spectra, 'Value');
         
-        xData = data.spectraData.DataSet(value).wavenumber;
-        yData = data.spectraData.DataSet(value).signal;
+        if numel( value ) == 0
+            % Return if nothing is selected
+            return
+        end
         
-        h = gui.ViewAxes;
-        
-        % Plot
-        plot( h, xData,yData,'o' );
-        
-        % Label the axes
-        xlabel(h,'Wavenumber'); ylabel(h,'Signal');
-        
-        if isfield( data.spectraData.DataSet(value), 'fitresult' ) ...
-                && ~isempty( data.spectraData.DataSet(value).fitresult )
+        for i=1:numel( value )
+                                   
+            xData = data.spectraData.DataSet(value(i)).wavenumber;
+            yData = data.spectraData.DataSet(value(i)).signal;
             
-            fitResult = data.spectraData.DataSet(value).fitresult;
-            xFit = linspace(xData(1),xData(end),1000);
-            yFit = feval( fitResult, xFit );
+            h = gui.ViewAxes;
             
-            hold( h, 'on' );
-            plot( h, xFit, yFit, '-' )
-            hold( h, 'off' );
+            if i>1
+                % Plot the other selected spectra with the previous one
+                hold( h,'on' )
+            else
+                hold( h,'off' )
+            end
+            
+            % Plot
+            p(i) = plot( h, xData,yData,'.' );
+            
+            % Set name on legend
+            p(i).DisplayName = data.spectraData.DataSet(value(i)).name;
+            
+            % Label the axes
+            xlabel(h,'Wavenumber'); ylabel(h,'Signal');
+            
+            if isfield( data.spectraData.DataSet(value(i)), 'fitresult' ) ...
+                    && ~isempty( data.spectraData.DataSet(value(i)).fitresult )
+                
+                fitResult = data.spectraData.DataSet(value(i)).fitresult;
+                xFit = linspace(xData(1),xData(end),1000);
+                yFit = feval( fitResult, xFit );
+                
+                hold( h, 'on' );
+                plot( h, xFit, yFit, '-' )
+                hold( h, 'off' );
+                
+            end
+            
+            if data.smoothed
+                % Plot smoothed line through spectrum
+                
+                for j=1:numel(p)
+                    ySmooth = smooth(yData,round( numel( yData)/15 ),'sgolay' );
+                    
+                    hold( h, 'on' );
+                    s = plot( h, xData, ySmooth, '-' );
+                    s.Color = p(i).Color;
+                    hold( h, 'off' );
+                end
+                
+            end
             
         end
+        
+        % Show legend
+        l = legend(h,'show',p);
+        l.Interpreter = 'none';
+        
+        % Release hold
+        hold( h,'off' )
         
         updateParameters();
         
@@ -473,22 +518,29 @@ updateInterface();
     %%%-----------------------------------------------------------------
     function onProcessITX( ~, ~ )
         
-        pathName = uigetdir('Choose folder to Pack');
+        % Open get file dialog
+        [fileName,pathName] = uigetfile(...
+            '*.itx', 'Igor Text Files',...
+            'Choose folder to Pack',...
+            'MultiSelect','on');
         
-        fileStruct = dir( [pathName, '/*.itx'] );
-        
-        fprintf( 'Importing %g files...\n', numel( fileStruct ) )
+        % Print info to command window
+        fprintf( 'Importing %g files...\n', numel( fileName ) )
         
         DataSet = struct([]);
         
-        for i=1:numel(fileStruct)
+        for i=1:numel(fileName)
             
-            [~, name, ~] = fileparts( fileStruct(i).name );
+            % Define full path to file (including file)
+            fullPath = [pathName, fileName{i}];
+            
+            % For the displayed name get rid of the 'itx' format ending
+            [~, name, ~] = fileparts( fullPath );
+            % Set name of the spectrum
             DataSet(i).name = name;
             
             % Import itx file
-            fileName = [pathName, '/', fileStruct(i).name];
-            importData = fcn_itximport( fileName, 'struct' );
+            importData = fcn_itximport( fullPath, 'struct' );
             
             [signal,wavenumber,wavelength,temperature] = ...
                 fcn_sfgprocess( importData.WLOPG, importData.SigOsc1, ...
@@ -500,7 +552,13 @@ updateInterface();
             DataSet(i).temperature = temperature;
         end
         
-        data.spectraData.DataSet = DataSet;
+        if numel( data.spectraData.DataSet ) < 1
+            data.spectraData.DataSet = DataSet;
+        else
+            % Put new spectra at the end of the data set
+            data.spectraData.DataSet(end+1:end+numel(fileName)) = DataSet;
+        end
+        
         
         updateInterface();
         onDataSelect();
@@ -527,7 +585,7 @@ updateInterface();
     function onClearData( ~, ~ )
         
         % Clear data
-        data.spectraData = [];
+        data.spectraData.DataSet = struct([]);
         
         % Empty the listbox
         gui.Spectra.String = {};

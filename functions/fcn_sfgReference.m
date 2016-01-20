@@ -12,8 +12,8 @@ for i=1:numel( DataSet )
         % spectrum
         isInReference = any( DataSet(i).wavelength(j) == GaAsWL );
         if ~isInReference
-            fprintf( 'Stopped execution at %s because the reference does not contain a wavelength of %g nm\n', DataSet(i).name, DataSet(i).wavelength(j) ) 
-            return
+            fprintf( 'Did not apply correction on %s because the reference does not contain a wavelength of %g nm\n', DataSet(i).name, DataSet(i).wavelength(j) ) 
+            break
         else
             % Get index of current wavelength in GaAs reference
             idx = find( DataSet(i).wavelength(j) == GaAsWL );
