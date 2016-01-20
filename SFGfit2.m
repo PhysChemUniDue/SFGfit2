@@ -24,7 +24,7 @@ updateInterface();
         
         % Create View Modes that are shown in the listbox in the view
         % control panel
-        data.spectraData = { };
+        data.spectraData.DataSet = struct([]);
         
         % Print output to command window?
         data.doPrint = true;
@@ -473,22 +473,29 @@ updateInterface();
     %%%-----------------------------------------------------------------
     function onProcessITX( ~, ~ )
         
-        pathName = uigetdir('Choose folder to Pack');
+        % Open get file dialog
+        [fileName,pathName] = uigetfile(...
+            '*.itx', 'Igor Text Files',...
+            'Choose folder to Pack',...
+            'MultiSelect','on');
         
-        fileStruct = dir( [pathName, '/*.itx'] );
-        
-        fprintf( 'Importing %g files...\n', numel( fileStruct ) )
+        % Print info to command window
+        fprintf( 'Importing %g files...\n', numel( fileName ) )
         
         DataSet = struct([]);
         
-        for i=1:numel(fileStruct)
+        for i=1:numel(fileName)
             
-            [~, name, ~] = fileparts( fileStruct(i).name );
+            % Define full path to file (including file)
+            fullPath = [pathName, fileName{i}];
+            
+            % For the displayed name get rid of the 'itx' format ending
+            [~, name, ~] = fileparts( fullPath );
+            % Set name of the spectrum
             DataSet(i).name = name;
             
             % Import itx file
-            fileName = [pathName, '/', fileStruct(i).name];
-            importData = fcn_itximport( fileName, 'struct' );
+            importData = fcn_itximport( fullPath, 'struct' );
             
             [signal,wavenumber,wavelength,temperature] = ...
                 fcn_sfgprocess( importData.WLOPG, importData.SigOsc1, ...
@@ -500,7 +507,8 @@ updateInterface();
             DataSet(i).temperature = temperature;
         end
         
-        data.spectraData.DataSet = DataSet;
+        % Put new spectra at the end of the data set
+        data.spectraData.DataSet(end+1:end+numel(fileName)) = DataSet
         
         updateInterface();
         onDataSelect();
