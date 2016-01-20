@@ -29,6 +29,9 @@ updateInterface();
         % Print output to command window?
         data.doPrint = true;
         
+        % Add smoothed line to spectrum
+        data.smoothed = true;
+        
         % Define Laser bandwidth
         data.laserBandwidth = 4.5;
         
@@ -392,7 +395,7 @@ updateInterface();
             end
             
             % Plot
-            p(i) = plot( h, xData,yData,'o' );
+            p(i) = plot( h, xData,yData,'.' );
             
             % Set name on legend
             p(i).DisplayName = data.spectraData.DataSet(value(i)).name;
@@ -411,14 +414,28 @@ updateInterface();
                 plot( h, xFit, yFit, '-' )
                 hold( h, 'off' );
                 
-            end           
+            end
+            
+            if data.smoothed
+                % Plot smoothed line through spectrum
                 
+                for j=1:numel(p)
+                    ySmooth = smooth(yData,round( numel( yData)/15 ),'sgolay' );
+                    
+                    hold( h, 'on' );
+                    s = plot( h, xData, ySmooth, '-' );
+                    s.Color = p(i).Color;
+                    hold( h, 'off' );
+                end
+                
+            end
+            
         end
         
         % Show legend
-        l = legend(h,'show');
+        l = legend(h,'show',p);
         l.Interpreter = 'none';
-            
+        
         % Release hold
         hold( h,'off' )
         
@@ -568,7 +585,7 @@ updateInterface();
     function onClearData( ~, ~ )
         
         % Clear data
-        data.spectraData = [];
+        data.spectraData.DataSet = struct([]);
         
         % Empty the listbox
         gui.Spectra.String = {};
