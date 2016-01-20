@@ -139,7 +139,9 @@ updateInterface();
             'Style', 'listbox', ...
             'FontName', data.MonoFont, ...
             'String', 'no data', ...
-            'Callback', @onDataSelect);
+            'Callback', @onDataSelect, ...
+            'Min', 0, ...
+            'Max', 2);
         
         infoPanel = uix.BoxPanel( 'Parent', rightContainer, ...
             'Title', 'Infos' );
@@ -370,29 +372,55 @@ updateInterface();
         
         value = get(gui.Spectra, 'Value');
         
-        xData = data.spectraData.DataSet(value).wavenumber;
-        yData = data.spectraData.DataSet(value).signal;
-        
-        h = gui.ViewAxes;
-        
-        % Plot
-        plot( h, xData,yData,'o' );
-        
-        % Label the axes
-        xlabel(h,'Wavenumber'); ylabel(h,'Signal');
-        
-        if isfield( data.spectraData.DataSet(value), 'fitresult' ) ...
-                && ~isempty( data.spectraData.DataSet(value).fitresult )
-            
-            fitResult = data.spectraData.DataSet(value).fitresult;
-            xFit = linspace(xData(1),xData(end),1000);
-            yFit = feval( fitResult, xFit );
-            
-            hold( h, 'on' );
-            plot( h, xFit, yFit, '-' )
-            hold( h, 'off' );
-            
+        if numel( value ) == 0
+            % Return if nothing is selected
+            return
         end
+        
+        for i=1:numel( value )
+                                   
+            xData = data.spectraData.DataSet(value(i)).wavenumber;
+            yData = data.spectraData.DataSet(value(i)).signal;
+            
+            h = gui.ViewAxes;
+            
+            if i>1
+                % Plot the other selected spectra with the previous one
+                hold( h,'on' )
+            else
+                hold( h,'off' )
+            end
+            
+            % Plot
+            p(i) = plot( h, xData,yData,'o' );
+            
+            % Set name on legend
+            p(i).DisplayName = data.spectraData.DataSet(value(i)).name;
+            
+            % Label the axes
+            xlabel(h,'Wavenumber'); ylabel(h,'Signal');
+            
+            if isfield( data.spectraData.DataSet(value(i)), 'fitresult' ) ...
+                    && ~isempty( data.spectraData.DataSet(value(i)).fitresult )
+                
+                fitResult = data.spectraData.DataSet(value(i)).fitresult;
+                xFit = linspace(xData(1),xData(end),1000);
+                yFit = feval( fitResult, xFit );
+                
+                hold( h, 'on' );
+                plot( h, xFit, yFit, '-' )
+                hold( h, 'off' );
+                
+            end           
+                
+        end
+        
+        % Show legend
+        l = legend(h,'show');
+        l.Interpreter = 'none';
+            
+        % Release hold
+        hold( h,'off' )
         
         updateParameters();
         
@@ -507,8 +535,13 @@ updateInterface();
             DataSet(i).temperature = temperature;
         end
         
-        % Put new spectra at the end of the data set
-        data.spectraData.DataSet(end+1:end+numel(fileName)) = DataSet
+        if numel( data.spectraData.DataSet ) < 1
+            data.spectraData.DataSet = DataSet;
+        else
+            % Put new spectra at the end of the data set
+            data.spectraData.DataSet(end+1:end+numel(fileName)) = DataSet;
+        end
+        
         
         updateInterface();
         onDataSelect();
