@@ -113,6 +113,8 @@ updateInterface();
         gui.ToolsMenu = uimenu ( gui.Window, 'Label', 'Tools' );
         uimenu( gui.ToolsMenu, 'Label', 'Apply Reference...', ...
             'Callback', @onApplyReference );
+        uimenu( gui.ToolsMenu, 'Label', 'Export Axes to Figure', ...
+            'Callback', @onExportAxesToFigure );
         
         % Arrange the main interface
         mainLayout = uix.HBoxFlex( 'Parent', gui.Window, 'Spacing', 3 );
@@ -576,6 +578,24 @@ updateInterface();
         
         updateInterface()
         onDataSelect()
+        
+    end
+
+    %%%-----------------------------------------------------------------
+    %%% Export Axes to Figue
+    %%%-----------------------------------------------------------------
+    function onExportAxesToFigure( ~, ~ )
+        % Creates a new figure outside of the GUI and copies the currently
+        % selected plots to it
+        
+        % Get Axes handle
+        ax = gui.ViewAxes;
+        
+        % Create new figure
+        f = figure;
+        
+        % Copy axes to new figure
+        copyobj( ax,f )
         
     end
     
