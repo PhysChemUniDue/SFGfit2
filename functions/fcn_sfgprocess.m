@@ -12,7 +12,7 @@ function [varargout] = fcn_sfgprocess(wavelengthData,signalData,temperatureData)
 signalData = abs(signalData);
 
 % Correct temperature values
-temperatureData = temperatureData * 125.19;
+temperatureData = temperatureData;
 
 % Count shots per wavelength
 shotsPerWL = 1;
@@ -83,7 +83,9 @@ if nargout == 1
     varargout{1}.signal = sigDataPr;
     varargout{1}.wavenumber = wavenumber;
     varargout{1}.wavelength = wlDataPr;
-    varargout{1}.snr = snrData;
+    varargout{1}.settings.snr = snrData;
+    varargout{1}.settings.spa = shotsPerWL;
+    varargout{1}.settings.stepSize = stepSize;
     varargout{1}.temperature = TempDataPr;
 elseif nargout == 3
     % Make signal and wavenumber array
