@@ -113,6 +113,10 @@ updateInterface();
         gui.ToolsMenu = uimenu ( gui.Window, 'Label', 'Tools' );
         uimenu( gui.ToolsMenu, 'Label', 'Apply Reference...', ...
             'Callback', @onApplyReference );
+        uimenu( gui.ToolsMenu, 'Label', 'Export Axes to Figure', ...
+            'Callback', @onExportAxesToFigure );
+        uimenu( gui.ToolsMenu, 'Label', 'Print Info', ...
+            'Callback', @onPrintInfo );
         
         % Arrange the main interface
         mainLayout = uix.HBoxFlex( 'Parent', gui.Window, 'Spacing', 3 );
@@ -527,29 +531,44 @@ updateInterface();
         % Print info to command window
         fprintf( 'Importing %g files...\n', numel( fileName ) )
         
-        DataSet = struct([]);
+%         DataSet = struct([]);
+        DataSet = struct('signal',[],...
+            'wavenumber',[],...
+            'wavelength',[],...
+            'settings',[],...
+            'temperature',[]);
         
-        for i=1:numel(fileName)
+        for i=numel( fileName ):-1:1
             
             % Define full path to file (including file)
             fullPath = [pathName, fileName{i}];
             
             % For the displayed name get rid of the 'itx' format ending
             [~, name, ~] = fileparts( fullPath );
-            % Set name of the spectrum
-            DataSet(i).name = name;
             
             % Import itx file
             importData = fcn_itximport( fullPath, 'struct' );
             
-            [signal,wavenumber,wavelength,temperature] = ...
+%             [signal,wavenumber,wavelength,temperature] = ...
+%                 fcn_sfgprocess( importData.WLOPG, importData.SigOsc1, ...
+%                 importData.SigDet1 );
+%             
+%             DataSet(i).signal = signal*10e10;
+%             DataSet(i).wavenumber = wavenumber;
+%             DataSet(i).wavelength = wavelength;
+%             DataSet(i).temperature = temperature;
+
+            DataSet(i) = ...
                 fcn_sfgprocess( importData.WLOPG, importData.SigOsc1, ...
                 importData.SigDet1 );
             
-            DataSet(i).signal = signal*10e10;
-            DataSet(i).wavenumber = wavenumber;
-            DataSet(i).wavelength = wavelength;
-            DataSet(i).temperature = temperature;
+        end
+        
+        for i=1:numel( DataSet )
+            % Set names (somehow not possible to do it in the above loop)                      
+            
+            % Set name of the spectrum
+            DataSet(i).name = name;
         end
         
         if numel( data.spectraData.DataSet ) < 1
@@ -576,6 +595,40 @@ updateInterface();
         
         updateInterface()
         onDataSelect()
+        
+    end
+
+    %%%-----------------------------------------------------------------
+    %%% Export Axes to Figue
+    %%%-----------------------------------------------------------------
+    function onExportAxesToFigure( ~, ~ )
+        % Creates a new figure outside of the GUI and copies the currently
+        % selected plots to it
+        
+        % Get Axes handle
+        ax = gui.ViewAxes;
+        
+        % Create new figure
+        f = figure;
+        
+        % Copy axes to new figure
+        copyobj( ax,f )
+        
+    end
+
+    %%%-----------------------------------------------------------------
+    %%% Print Info
+    %%%-----------------------------------------------------------------
+    function onPrintInfo( ~, ~ )
+        % Print Info for selected plots to command window
+        
+        % Get selected spectra
+        values = gui.Spectra.Value;
+        
+        for i=1:numel( values )
+            disp( data.spectraData.DataSet(i).name )
+            disp( data.spectraData.DataSet(i).settings )
+        end
         
     end
     
