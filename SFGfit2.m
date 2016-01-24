@@ -544,7 +544,7 @@ updateInterface();
             fullPath = [pathName, fileName{i}];
             
             % For the displayed name get rid of the 'itx' format ending
-            [~, name, ~] = fileparts( fullPath );
+            [~, name, ~] = fileparts( fullPath )
             
             % Import itx file
             importData = fcn_itximport( fullPath, 'struct' );
@@ -562,13 +562,15 @@ updateInterface();
                 fcn_sfgprocess( importData.WLOPG, importData.SigOsc1, ...
                 importData.SigDet1 );
             
+            n(i).name = name;
+            
         end
         
         for i=1:numel( DataSet )
             % Set names (somehow not possible to do it in the above loop)                      
             
             % Set name of the spectrum
-            DataSet(i).name = name;
+            DataSet(i).name = n(i).name;
         end
         
         if numel( data.spectraData.DataSet ) < 1
