@@ -26,6 +26,9 @@ updateInterface();
         % control panel
         data.spectraData.DataSet = struct([]);
         
+        % Entry for remembering the last folder that was selected
+        data.lastFolder = [pwd,'/'];
+        
         % Print output to command window?
         data.doPrint = true;
         
@@ -291,6 +294,9 @@ updateInterface();
             return
         end
         
+        % Remember folder
+        data.lastFolder = PathName;
+        
         % Load the data
         data.spectraData = load( [PathName, '/', FileName] );
         
@@ -523,10 +529,27 @@ updateInterface();
     function onProcessITX( ~, ~ )
         
         % Open get file dialog
-        [fileName,pathName] = uigetfile(...
-            '*.itx', 'Igor Text Files',...
-            'Choose folder to Pack',...
-            'MultiSelect','on');
+        [fileName,pathName,filterindex] = uigetfile(...
+            [data.lastFolder,'*.itx'],...
+            'Choose Files to Import',...
+            'MultiSelect','on')
+        
+        % If user presses 'Cancel'
+        if filterindex == 0
+            return
+        end
+        
+        % If only one file is selected it is treted as a string but is not
+        % contained in a cell array. Because we access a cell array
+        % underneath we have to but it in one
+        if ~iscell( fileName )
+            fileNameString = fileName;
+            fileName = cell(1);
+            fileName{1} = fileNameString;
+        end
+        
+        % Remember folder
+        data.lastFolder = pathName;
         
         % Print info to command window
         fprintf( 'Importing %g files...\n', numel( fileName ) )
@@ -544,7 +567,7 @@ updateInterface();
             fullPath = [pathName, fileName{i}];
             
             % For the displayed name get rid of the 'itx' format ending
-            [~, name, ~] = fileparts( fullPath )
+            [~, name, ~] = fileparts( fullPath );
             
             % Import itx file
             importData = fcn_itximport( fullPath, 'struct' );
@@ -592,7 +615,8 @@ updateInterface();
     %%%-----------------------------------------------------------------
     function onApplyReference( ~, ~ )
         
-        DataSet = fcn_sfgReference( data.spectraData.DataSet );
+        [DataSet,data.lastFolder] = ...
+            fcn_sfgReference( data.spectraData.DataSet, gui.Spectra.Value );
         data.spectraData.DataSet = DataSet;
         
         updateInterface()
