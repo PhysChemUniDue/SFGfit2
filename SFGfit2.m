@@ -33,7 +33,7 @@ updateInterface();
         data.doPrint = true;
         
         % Add smoothed line to spectrum
-        data.smoothed = true;
+        data.smoothed = false;
         
         % Define Laser bandwidth
         data.laserBandwidth = 4.5;
@@ -51,12 +51,12 @@ updateInterface();
         
         
         % Settings
-        data.fitModel = 'abs(NR+A01./(w01-x-1i*G01)+A02./(w02-x-1i*G02)+A03./(w03-x-1i*G03)+A04./(w04-x-1i*G04)+A05./(w05-x-1i*G05)).^2';
+        data.fitModel = 'Offset + abs(NR+A01./(w01-x-1i*G01)+A02./(w02-x-1i*G02)+A03./(w03-x-1i*G03)+A04./(w04-x-1i*G04)+A05./(w05-x-1i*G05)).^2';
         data.numPeaks = 5;
         
         % Configure fit options
         data.fitOpts = fitoptions( 'Method', 'NonlinearLeastSquares' );
-        data.fitOpts.Robust = 'off';
+        data.fitOpts.Robust = 'Bisquare';
         data.fitOpts.Algorithm = 'Trust-Region';
         data.fitOpts.DiffMaxChange = 10e-6;
         data.fitOpts.DiffMinChange = 10e-8;
@@ -96,8 +96,10 @@ updateInterface();
             'Separator', 'on', 'Callback', @onEditSettings );
         uimenu( gui.FileMenu, 'Label', 'Load Settings ...', ...
             'Callback', @onLoadSettings );
+        uimenu( gui.FileMenu, 'Label', 'Remove Selected', ...
+            'Separator', 'on', 'Callback', @onRemoveSelected );
         uimenu( gui.FileMenu, 'Label', 'Clear Data', ...
-            'Separator', 'on', 'Callback', @onClearData );
+            'Separator', 'off', 'Callback', @onClearData );
         uimenu( gui.FileMenu, 'Label', 'Exit', ...
             'Separator', 'off', 'Callback', @onExit );
         
@@ -111,11 +113,15 @@ updateInterface();
             'Separator', 'on', 'Callback', @onSaveFitParameters );
         uimenu( gui.FitMenu, 'Label', 'Load Fit Parameters ...', ...
             'Separator', 'off', 'Callback', @onLoadFitParameters );
+        gui.PlotParameters = uimenu( gui.FitMenu, 'Label', 'Plot Fit Parameters', ...
+            'Separator', 'on', 'Checked', 'on' );
         
         % + Tools Menu
         gui.ToolsMenu = uimenu ( gui.Window, 'Label', 'Tools' );
         uimenu( gui.ToolsMenu, 'Label', 'Apply Reference...', ...
             'Callback', @onApplyReference );
+        uimenu( gui.ToolsMenu, 'Label', 'Combine/Average Selected', ...
+            'Callback', @onCombineAverage );
         uimenu( gui.ToolsMenu, 'Label', 'Export Axes to Figure', ...
             'Callback', @onExportAxesToFigure );
         uimenu( gui.ToolsMenu, 'Label', 'Print Info', ...
@@ -250,14 +256,17 @@ updateInterface();
         d = [data.parameters.oscStrength, ...
             data.parameters.dampingCoeffs, ...
             data.parameters.nonResonant, ...
+            data.parameters.offset, ...
             data.parameters.peakPos;
             data.parameters.oscStrengthLower, ...
             data.parameters.dampingCoeffsLower, ...
             data.parameters.nonResonantLower, ...
+            data.parameters.offsetLower, ...
             data.parameters.peakPosLower;
             data.parameters.oscStrengthUpper, ...
             data.parameters.dampingCoeffsUpper, ...
             data.parameters.nonResonantUpper, ...
+            data.parameters.offsetUpper, ...
             data.parameters.peakPosUpper]';
         
         % Set row and column names and other parameters
@@ -440,6 +449,39 @@ updateInterface();
                 
             end
             
+            if get( gui.PlotParameters, 'Checked' )
+                
+                hold( h, 'on' )
+                
+                % Evaluate function
+                
+                parameters = [data.parameters.oscStrength, ...
+                    data.parameters.dampingCoeffs, ...
+                    data.parameters.nonResonant, ...
+                    data.parameters.offset, ...
+                    data.parameters.peakPos];
+                
+                FitString = 'cfit(f';
+                
+                for m=1:numel( parameters )
+                    FitString = [FitString, ', ', num2str( parameters(m) )];
+                end
+                
+                FitString = [FitString, ')'];
+                    
+                f = fittype( data.fitModel );
+                c = eval( FitString );
+                
+                xFit = linspace(xData(1),xData(end),1000);
+                yFit = feval( c, xFit );
+                
+                hold( h, 'on' );
+                plot( h, xFit, yFit, '-' )
+                hold( h, 'off' );
+                
+                hold( h, 'off' )
+            end
+            
         end
         
         % Show legend
@@ -490,6 +532,7 @@ updateInterface();
         gui.paramTable.Data(r,c) = numval;
         
         updateParameters()
+        onDataSelect()
         
     end
 
@@ -532,7 +575,7 @@ updateInterface();
         [fileName,pathName,filterindex] = uigetfile(...
             [data.lastFolder,'*.itx'],...
             'Choose Files to Import',...
-            'MultiSelect','on')
+            'MultiSelect','on');
         
         % If user presses 'Cancel'
         if filterindex == 0
@@ -625,6 +668,27 @@ updateInterface();
     end
 
     %%%-----------------------------------------------------------------
+    %%% Apply Reference Spectrum
+    %%%-----------------------------------------------------------------
+    function onCombineAverage( ~, ~ )
+        
+        % Get selected spectra
+        idx = gui.Spectra.Value;
+        
+        % Return if only one is selected
+        if numel( idx ) < 1
+            return
+        end
+        
+        % Function
+        DataSet = ...
+            fcn_spectraCombineAverage( data.spectraData.DataSet(idx) );
+        
+        
+        data.spectraData.DataSet(end+1:end+numel(idx)) = DataSet;
+    end
+
+    %%%-----------------------------------------------------------------
     %%% Export Axes to Figue
     %%%-----------------------------------------------------------------
     function onExportAxesToFigure( ~, ~ )
@@ -655,6 +719,20 @@ updateInterface();
             disp( data.spectraData.DataSet(i).name )
             disp( data.spectraData.DataSet(i).settings )
         end
+        
+    end
+
+
+    %%%-----------------------------------------------------------------
+    %%% Removes the selected data from listbox and struct
+    %%%-----------------------------------------------------------------
+    function onRemoveSelected( ~, ~ )
+        
+        % Clear data
+        data.spectraData.DataSet(gui.Spectra.Value) = [];
+        
+        % Update the interface
+        updateInterface();
         
     end
     
@@ -753,6 +831,10 @@ updateInterface();
         data.parameters.nonResonantLower = tableData(2*numPeaks+1,2)';
         data.parameters.nonResonantUpper = tableData(2*numPeaks+1,3)';
         
+        data.parameters.offset = tableData(2*numPeaks+2,1)';
+        data.parameters.offsetLower = tableData(2*numPeaks+2,2)';
+        data.parameters.offsetUpper = tableData(2*numPeaks+2,3)';
+        
         updateCoefficients( gui.Spectra.Value )
     end
 
@@ -773,6 +855,7 @@ updateInterface();
                     data.parameters.peakPos(i) ));
             end           
             
+            % Mumbo Jumbo
             data.parameters.oscStrength = ...
                 ((data.parameters.dampingCoeffs - data.laserBandwidth).* ...
                 sqrt(data.spectraData.DataSet(spectrumIndex).signal(idx)) + ...
@@ -788,14 +871,17 @@ updateInterface();
         data.fitOpts.StartPoint = [data.parameters.oscStrength, ...
             data.parameters.dampingCoeffs, ...
             data.parameters.nonResonant, ...
+            data.parameters.offset, ...
             data.parameters.peakPos];
         data.fitOpts.Lower = [data.parameters.oscStrengthLower, ...
             data.parameters.dampingCoeffsLower, ...
             data.parameters.nonResonantLower, ...
+            data.parameters.offsetLower, ...
             data.parameters.peakPosLower];
         data.fitOpts.Upper = [data.parameters.oscStrengthUpper, ...
             data.parameters.dampingCoeffsUpper, ...
             data.parameters.nonResonantUpper, ...
+            data.parameters.offsetUpper, ...
             data.parameters.peakPosUpper];
         
         % Update Table
