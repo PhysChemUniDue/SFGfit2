@@ -22,15 +22,20 @@ updateInterface();
         % Get the system defined monospaced font
         data.MonoFont = get(0, 'FixedWidthFontName');
         
-        % Create View Modes that are shown in the listbox in the view
-        % control panel
+        % Create empty data set
         data.spectraData.DataSet = struct([]);
+        
+        % Create empty FID data set
+        data.FID = struct([]);
+        
+        % Entry for remembering the last folder that was selected
+        data.lastFolder = [pwd,'/'];
         
         % Print output to command window?
         data.doPrint = true;
         
         % Add smoothed line to spectrum
-        data.smoothed = true;
+        data.smoothed = false;
         
         % Define Laser bandwidth
         data.laserBandwidth = 4.5;
@@ -48,12 +53,12 @@ updateInterface();
         
         
         % Settings
-        data.fitModel = 'abs(NR+A01./(w01-x-1i*G01)+A02./(w02-x-1i*G02)+A03./(w03-x-1i*G03)+A04./(w04-x-1i*G04)+A05./(w05-x-1i*G05)).^2';
+        data.fitModel = 'Offset + abs(NR+A01./(w01-x-1i*G01)+A02./(w02-x-1i*G02)+A03./(w03-x-1i*G03)+A04./(w04-x-1i*G04)+A05./(w05-x-1i*G05)).^2';
         data.numPeaks = 5;
         
         % Configure fit options
         data.fitOpts = fitoptions( 'Method', 'NonlinearLeastSquares' );
-        data.fitOpts.Robust = 'off';
+        data.fitOpts.Robust = 'Bisquare';
         data.fitOpts.Algorithm = 'Trust-Region';
         data.fitOpts.DiffMaxChange = 10e-6;
         data.fitOpts.DiffMinChange = 10e-8;
@@ -93,8 +98,10 @@ updateInterface();
             'Separator', 'on', 'Callback', @onEditSettings );
         uimenu( gui.FileMenu, 'Label', 'Load Settings ...', ...
             'Callback', @onLoadSettings );
+        uimenu( gui.FileMenu, 'Label', 'Remove Selected', ...
+            'Separator', 'on', 'Callback', @onRemoveSelected );
         uimenu( gui.FileMenu, 'Label', 'Clear Data', ...
-            'Separator', 'on', 'Callback', @onClearData );
+            'Separator', 'off', 'Callback', @onClearData );
         uimenu( gui.FileMenu, 'Label', 'Exit', ...
             'Separator', 'off', 'Callback', @onExit );
         
@@ -108,15 +115,24 @@ updateInterface();
             'Separator', 'on', 'Callback', @onSaveFitParameters );
         uimenu( gui.FitMenu, 'Label', 'Load Fit Parameters ...', ...
             'Separator', 'off', 'Callback', @onLoadFitParameters );
+        gui.PlotParameters = uimenu( gui.FitMenu, 'Label', 'Plot Fit Parameters', ...
+            'Separator', 'on', 'Checked', 'on', 'Callback', @onPlotParameters );
         
         % + Tools Menu
         gui.ToolsMenu = uimenu ( gui.Window, 'Label', 'Tools' );
         uimenu( gui.ToolsMenu, 'Label', 'Apply Reference...', ...
             'Callback', @onApplyReference );
+        uimenu( gui.ToolsMenu, 'Label', 'Combine/Average Selected', ...
+            'Callback', @onCombineAverage );
         uimenu( gui.ToolsMenu, 'Label', 'Export Axes to Figure', ...
             'Callback', @onExportAxesToFigure );
         uimenu( gui.ToolsMenu, 'Label', 'Print Info', ...
             'Callback', @onPrintInfo );
+        
+        % + FID Menu
+        gui.FIDMenu = uimenu ( gui.Window, 'Label', 'FID' );
+        uimenu( gui.FIDMenu, 'Label', 'Load FID data (ITX) ...', ...
+            'Callback', @onProcessFID );
         
         % Arrange the main interface
         mainLayout = uix.HBoxFlex( 'Parent', gui.Window, 'Spacing', 3 );
@@ -247,14 +263,17 @@ updateInterface();
         d = [data.parameters.oscStrength, ...
             data.parameters.dampingCoeffs, ...
             data.parameters.nonResonant, ...
+            data.parameters.offset, ...
             data.parameters.peakPos;
             data.parameters.oscStrengthLower, ...
             data.parameters.dampingCoeffsLower, ...
             data.parameters.nonResonantLower, ...
+            data.parameters.offsetLower, ...
             data.parameters.peakPosLower;
             data.parameters.oscStrengthUpper, ...
             data.parameters.dampingCoeffsUpper, ...
             data.parameters.nonResonantUpper, ...
+            data.parameters.offsetUpper, ...
             data.parameters.peakPosUpper]';
         
         % Set row and column names and other parameters
@@ -290,6 +309,9 @@ updateInterface();
         if filterindex == 0
             return
         end
+        
+        % Remember folder
+        data.lastFolder = PathName;
         
         % Load the data
         data.spectraData = load( [PathName, '/', FileName] );
@@ -434,6 +456,39 @@ updateInterface();
                 
             end
             
+            if strcmp(gui.PlotParameters.Checked,'on')
+                
+                hold( h, 'on' )
+                
+                % Evaluate function
+                
+                parameters = [data.parameters.oscStrength, ...
+                    data.parameters.dampingCoeffs, ...
+                    data.parameters.nonResonant, ...
+                    data.parameters.offset, ...
+                    data.parameters.peakPos];
+                
+                FitString = 'cfit(f';
+                
+                for m=1:numel( parameters )
+                    FitString = [FitString, ', ', num2str( parameters(m) )];
+                end
+                
+                FitString = [FitString, ')'];
+                    
+                f = fittype( data.fitModel );
+                c = eval( FitString );
+                
+                xFit = linspace(xData(1),xData(end),1000);
+                yFit = feval( c, xFit );
+                
+                hold( h, 'on' );
+                plot( h, xFit, yFit, '-' )
+                hold( h, 'off' );
+                
+                hold( h, 'off' )
+            end
+            
         end
         
         % Show legend
@@ -474,6 +529,19 @@ updateInterface();
     end
 
     %%%-----------------------------------------------------------------
+    %%% Executes fitting function for selected spectrum
+    %%%-----------------------------------------------------------------
+    function onPlotParameters( ~, ~ )
+        
+        if strcmp(gui.PlotParameters.Checked,'on')
+            gui.PlotParameters.Checked = 'off';
+        else
+            gui.PlotParameters.Checked = 'on';
+        end
+        
+    end
+
+%%%-----------------------------------------------------------------
     %%% Draws a table with fitting parameters
     %%%-----------------------------------------------------------------
     function updateTableData( ~, callbackdata )
@@ -484,6 +552,7 @@ updateInterface();
         gui.paramTable.Data(r,c) = numval;
         
         updateParameters()
+        onDataSelect()
         
     end
 
@@ -523,10 +592,27 @@ updateInterface();
     function onProcessITX( ~, ~ )
         
         % Open get file dialog
-        [fileName,pathName] = uigetfile(...
-            '*.itx', 'Igor Text Files',...
-            'Choose folder to Pack',...
+        [fileName,pathName,filterindex] = uigetfile(...
+            [data.lastFolder,'*.itx'],...
+            'Choose Files to Import',...
             'MultiSelect','on');
+        
+        % If user presses 'Cancel'
+        if filterindex == 0
+            return
+        end
+        
+        % If only one file is selected it is treated as a string but is not
+        % contained in a cell array. Because we access a cell array
+        % underneath we have to but it in one
+        if ~iscell( fileName )
+            fileNameString = fileName;
+            fileName = cell(1);
+            fileName{1} = fileNameString;
+        end
+        
+        % Remember folder
+        data.lastFolder = pathName;
         
         % Print info to command window
         fprintf( 'Importing %g files...\n', numel( fileName ) )
@@ -544,7 +630,7 @@ updateInterface();
             fullPath = [pathName, fileName{i}];
             
             % For the displayed name get rid of the 'itx' format ending
-            [~, name, ~] = fileparts( fullPath )
+            [~, name, ~] = fileparts( fullPath );
             
             % Import itx file
             importData = fcn_itximport( fullPath, 'struct' );
@@ -567,7 +653,7 @@ updateInterface();
         end
         
         for i=1:numel( DataSet )
-            % Set names (somehow not possible to do it in the above loop)                      
+            % Set names (somehow not possible to do it in the above loop)
             
             % Set name of the spectrum
             DataSet(i).name = n(i).name;
@@ -586,13 +672,14 @@ updateInterface();
         fprintf( '\tDone.\n' )
         
     end
-    
-    %%%-----------------------------------------------------------------
-    %%% Apply Reference Spectrum
-    %%%-----------------------------------------------------------------
+
+%%%-----------------------------------------------------------------
+%%% Apply Reference Spectrum
+%%%-----------------------------------------------------------------
     function onApplyReference( ~, ~ )
         
-        DataSet = fcn_sfgReference( data.spectraData.DataSet );
+        [DataSet,data.lastFolder] = ...
+            fcn_sfgReference( data.spectraData.DataSet, gui.Spectra.Value );
         data.spectraData.DataSet = DataSet;
         
         updateInterface()
@@ -600,9 +687,30 @@ updateInterface();
         
     end
 
-    %%%-----------------------------------------------------------------
-    %%% Export Axes to Figue
-    %%%-----------------------------------------------------------------
+%%%-----------------------------------------------------------------
+%%% Apply Reference Spectrum
+%%%-----------------------------------------------------------------
+    function onCombineAverage( ~, ~ )
+        
+        % Get selected spectra
+        idx = gui.Spectra.Value;
+        
+        % Return if only one is selected
+        if numel( idx ) < 1
+            return
+        end
+        
+        % Function
+        DataSet = ...
+            fcn_spectraCombineAverage( data.spectraData.DataSet(idx) );
+        
+        
+        data.spectraData.DataSet(end+1:end+numel(idx)) = DataSet;
+    end
+
+%%%-----------------------------------------------------------------
+%%% Export Axes to Figue
+%%%-----------------------------------------------------------------
     function onExportAxesToFigure( ~, ~ )
         % Creates a new figure outside of the GUI and copies the currently
         % selected plots to it
@@ -618,9 +726,9 @@ updateInterface();
         
     end
 
-    %%%-----------------------------------------------------------------
-    %%% Print Info
-    %%%-----------------------------------------------------------------
+%%%-----------------------------------------------------------------
+%%% Print Info
+%%%-----------------------------------------------------------------
     function onPrintInfo( ~, ~ )
         % Print Info for selected plots to command window
         
@@ -633,10 +741,24 @@ updateInterface();
         end
         
     end
-    
-    %%%-----------------------------------------------------------------
-    %%% Clears the listbox and data from struct
-    %%%-----------------------------------------------------------------
+
+
+%%%-----------------------------------------------------------------
+%%% Removes the selected data from listbox and struct
+%%%-----------------------------------------------------------------
+    function onRemoveSelected( ~, ~ )
+        
+        % Clear data
+        data.spectraData.DataSet(gui.Spectra.Value) = [];
+        
+        % Update the interface
+        updateInterface();
+        
+    end
+
+%%%-----------------------------------------------------------------
+%%% Clears the listbox and data from struct
+%%%-----------------------------------------------------------------
     function onClearData( ~, ~ )
         
         % Clear data
@@ -647,6 +769,130 @@ updateInterface();
         
         % Update the interface
         updateInterface();
+        
+    end
+
+%%%-----------------------------------------------------------------
+%%% Process FID
+%%%-----------------------------------------------------------------
+    function onProcessFID( ~, ~ )
+        
+        % Open get file dialog
+        [fileName,pathName,filterindex] = uigetfile(...
+            [data.lastFolder,'*.itx'],...
+            'Choose FID to Process',...
+            'MultiSelect','off');
+        
+        % If user presses 'Cancel'
+        if filterindex == 0
+            return
+        end
+        
+        % Import itx file
+        importData = fcn_itximport( [pathName '/' fileName], 'struct' );
+        
+        % Put imported data in the appropriate structure
+        data.FID(1).signalRaw = importData.SigOsc1;
+        data.FID(1).delayRaw = importData.DtLine1;
+        
+        % Make absolute signal values
+        signalData = abs(data.FID(1).signalRaw);
+        
+        % Count shots per delay
+        shotsPerDL = 1;
+        for k=1:length(data.FID.delayRaw)
+            if data.FID.delayRaw(k+1) == data.FID.delayRaw(k)
+                shotsPerDL = shotsPerDL + 1;
+            else
+                break
+            end
+        end
+        
+        % Get length of raw data
+        lengthRD = length(data.FID.delayRaw);
+        % Determine length of processed data
+        lengthPD = lengthRD/shotsPerDL;
+        
+        % Get step size
+        % Get minimum delay
+        minDL = min(data.FID.delayRaw);
+        % Get maximum delay
+        maxDL = max(data.FID.delayRaw);
+        % Total delay range
+        rangeDL = maxDL - minDL;
+        % Step size
+        stepSize = rangeDL/(lengthPD - 1);
+        
+        % Make array for processed delay data
+        dlDataPr = minDL:stepSize:maxDL;
+        % Make empty array for processed signal data
+        sigDataPr = zeros(1,length(dlDataPr));
+        
+        % Make empty array for signal to noise ratio data
+        snrData = zeros(1,length(dlDataPr));
+        
+        % Loop through every delay
+        for j=1:length(dlDataPr)
+            % Get range of signal data
+            signalDataRangeL = ((j-1)*shotsPerDL) + 1;
+            signalDataRangeU = signalDataRangeL + shotsPerDL - 1;
+            % Define signal data in range
+            dataRange = signalData(signalDataRangeL:signalDataRangeU);
+            %   DataNumber = numel(dataRange)
+            % Calculate Standard deviation
+            % stdDev =...
+            %    std(dataRange);
+            % Delete Values that are out of a reasonable range
+            meanDataRange = mean(dataRange);
+            %dataRange(dataRange>meanDataRange + stdDev) = [];
+            %dataRange(dataRange<meanDataRange - stdDev) = [];
+            %meanDataRange2 = mean(dataRange);
+            %  newDataNumber = numel(dataRange)
+            % Get average of signalData
+            sigDataPr(j) =...
+                meanDataRange;
+            % Calculate Signal to noise Ratio
+            signal = signalData(signalDataRangeL:signalDataRangeU);
+            noise = signal - sigDataPr(j);
+            snrData(j) = snr(signal,noise);
+        end
+        
+        data.FID.signal = sigDataPr*1e10;
+        data.FID.delay = dlDataPr;
+        
+        disp( data.FID )
+        
+        % Fit data
+        ft = fittype( 'a*exp(-(x-b)^2/(2*c^2))+d' );
+        FitObj = fit( data.FID.delay', data.FID.signal', ft, ...
+            'StartPoint', ...
+            [max(data.FID.signal), ...
+            data.FID.delay(data.FID.signal==max(data.FID.signal)), ...
+            15, ...
+            mean(data.FID.signal)] );
+        xFit = linspace( min(data.FID.delay),max(data.FID.delay),1000 );
+        yFit = feval( FitObj, xFit );
+        
+        cVals = coeffvalues( FitObj );
+        cErrors = confint( FitObj );
+        cErrorsRelative = cErrors(2,:) - cVals;
+        
+        data.FID.delayTime = cVals(2);
+        data.FID.FWTM = 2*sqrt(2*log(10))*cVals(3);
+        
+        % Plot results
+        figure
+        hold on
+        p = plot( data.FID.delay, data.FID.signal, '.-' );
+        p.DisplayName = 'Data';
+        f = plot( xFit,yFit );
+        f.DisplayName = sprintf(...
+            'Fitted Curve\nDelay = %.1f $\\pm$ %.1f ps\nFWTM = %.1f ps\n', ...
+            data.FID.delayTime, cErrorsRelative(2), data.FID.FWTM );
+        xlabel( 'Delay [ps]' )
+        ylabel( 'Signal [a.u.]')
+        title( fileName )
+        legend('show','Location','best')
         
     end
 
@@ -729,6 +975,10 @@ updateInterface();
         data.parameters.nonResonantLower = tableData(2*numPeaks+1,2)';
         data.parameters.nonResonantUpper = tableData(2*numPeaks+1,3)';
         
+        data.parameters.offset = tableData(2*numPeaks+2,1)';
+        data.parameters.offsetLower = tableData(2*numPeaks+2,2)';
+        data.parameters.offsetUpper = tableData(2*numPeaks+2,3)';
+        
         updateCoefficients( gui.Spectra.Value )
     end
 
@@ -749,6 +999,7 @@ updateInterface();
                     data.parameters.peakPos(i) ));
             end           
             
+            % Mumbo Jumbo
             data.parameters.oscStrength = ...
                 ((data.parameters.dampingCoeffs - data.laserBandwidth).* ...
                 sqrt(data.spectraData.DataSet(spectrumIndex).signal(idx)) + ...
@@ -764,14 +1015,17 @@ updateInterface();
         data.fitOpts.StartPoint = [data.parameters.oscStrength, ...
             data.parameters.dampingCoeffs, ...
             data.parameters.nonResonant, ...
+            data.parameters.offset, ...
             data.parameters.peakPos];
         data.fitOpts.Lower = [data.parameters.oscStrengthLower, ...
             data.parameters.dampingCoeffsLower, ...
             data.parameters.nonResonantLower, ...
+            data.parameters.offsetLower, ...
             data.parameters.peakPosLower];
         data.fitOpts.Upper = [data.parameters.oscStrengthUpper, ...
             data.parameters.dampingCoeffsUpper, ...
             data.parameters.nonResonantUpper, ...
+            data.parameters.offsetUpper, ...
             data.parameters.peakPosUpper];
         
         % Update Table

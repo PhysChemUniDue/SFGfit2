@@ -1,32 +1,32 @@
-function DataSet = fcn_sfgReference( DataSet )
+function [DataSet,lastFolder] = fcn_sfgReference( DataSet, idx )
 
 fprintf( 'Loading reference spectrum ...\n' )
 [GaAsSig,~,GaAsWL] = loadReference();
 
 % Process Spectra
-fprintf( 'Processing %g spectra ...\n', numel( DataSet ) )
-for i=1:numel( DataSet )
+fprintf( 'Processing %g spectra ...\n', numel( idx ) )
+for i=1:numel( idx )
+    % Loop only through the selected spectra
     
-    for j=1:numel( DataSet(i).wavelength )
+    for j=1:numel( DataSet(idx(i)).wavelength )
         % Check if the GaAs spectrum contains all wavelengths of the actual SFG
         % spectrum
-        isInReference = any( DataSet(i).wavelength(j) == GaAsWL );
+        isInReference = any( DataSet(idx(i)).wavelength(j) == GaAsWL );
         if ~isInReference
-            fprintf( 'Did not apply correction on %s because the reference does not contain a wavelength of %g nm\n', DataSet(i).name, DataSet(i).wavelength(j) ) 
-            break
+            fprintf( 'Did not apply any corrections because the reference does not contain a wavelength of %g nm\nError caused by %s\n', DataSet(idx(i)).wavelength(j), DataSet(idx(i)).name ) 
+            % Return without applying anything
+            return
         else
             % Get index of current wavelength in GaAs reference
-            idx = find( DataSet(i).wavelength(j) == GaAsWL );
+            WLidx = find( DataSet(idx(i)).wavelength(j) == GaAsWL );
             % Processing
-            DataSet(i).signal(j) = DataSet(i).signal(j)/GaAsSig(idx);
+            DataSet(idx(i)).signal(j) = DataSet(idx(i)).signal(j)/GaAsSig(WLidx);
         end
     end
     
 end
 
 fprintf( '\tDone.\n' )
-
-end
 
 
 
@@ -37,6 +37,7 @@ function [GaAsSig,GaAsWN,GaAsWL] = loadReference()
 
 % Choose file
 [filename, pathname, ~] = uigetfile('*.itx','Choose GaAs Reference');
+lastFolder = pathname;
 
 % Import itx file
 data = itximport( [pathname filename],'struct' );
@@ -49,3 +50,6 @@ data = itximport( [pathname filename],'struct' );
 GaAsSig = GaAsSig*1e10;
 
 end
+
+end
+
