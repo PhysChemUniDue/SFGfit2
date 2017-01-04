@@ -9,7 +9,7 @@ function [varargout] = fcn_sfgprocess(wavelengthData,signalData,temperatureData)
 %
 
 % Make absolute signal values
-signalData = abs(signalData);
+signalData = abs(signalData)*1e10;
 
 % Correct temperature values
 temperatureData = temperatureData;
