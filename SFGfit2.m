@@ -887,8 +887,8 @@ updateInterface();
         p.DisplayName = 'Data';
         f = plot( xFit,yFit );
         f.DisplayName = sprintf(...
-            'Fitted Curve\nDelay = %.1f $\\pm$ %.1f ps\nFWTM = %.1f ps\n', ...
-            data.FID.delayTime, cErrorsRelative(2), data.FID.FWTM );
+            'Fitted Curve\nDelay = %.1f $\\pm$ %.1f ps\nFWTM = %.1f ps\nAveraged over %.0f shots\nStep width %.0f ps\n', ...
+            data.FID.delayTime, cErrorsRelative(2), data.FID.FWTM, shotsPerDL, stepSize );
         xlabel( 'Delay [ps]' )
         ylabel( 'Signal [a.u.]')
         title( fileName )
