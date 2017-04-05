@@ -16,9 +16,14 @@ updateInterface();
 
 %-------------------------------------------------------------------------%
     function data = createData()
+        % Entry for remembering the last folder that was selected
+        [data.lastFolder,~,~] = fileparts(mfilename('fullpath'));
+        
         % Add folders to search path
-        addpath([pwd,'/layout'], [pwd,'/data'], ...
-            [pwd,'/settings'], [pwd,'/functions'])
+        addpath( ...
+            [data.lastFolder,'/data'], ...
+            [data.lastFolder,'/settings'], ...
+            [data.lastFolder,'/functions'])
         % Get the system defined monospaced font
         data.MonoFont = get(0, 'FixedWidthFontName');
         
@@ -27,11 +32,8 @@ updateInterface();
         
         % Create empty FID data set
         data.FID = struct([]);
-        
-        % Entry for remembering the last folder that was selected
-        data.lastFolder = [pwd,'/'];
-        
-        % Print output to command window?
+                
+        % Print output to com~mand window?
         data.doPrint = true;
         
         % Add smoothed line to spectrum
@@ -53,7 +55,7 @@ updateInterface();
         
         
         % Settings
-        data.fitModel = 'Offset + abs(NR+A01./(w01-x-1i*G01)+A02./(w02-x-1i*G02)+A03./(w03-x-1i*G03)+A04./(w04-x-1i*G04)+A05./(w05-x-1i*G05)).^2';
+        data.fitModel = fileread('settings/defaultFitModel.fm');
         data.numPeaks = 5;
         
         % Configure fit options
@@ -115,6 +117,8 @@ updateInterface();
             'Separator', 'on', 'Callback', @onSaveFitParameters );
         uimenu( gui.FitMenu, 'Label', 'Load Fit Parameters ...', ...
             'Separator', 'off', 'Callback', @onLoadFitParameters );
+        uimenu( gui.FitMenu, 'Label', 'Load Fit Model ...', ...
+            'Separator', 'off', 'Callback', @onLoadFitModel );
         gui.PlotParameters = uimenu( gui.FitMenu, 'Label', 'Plot Fit Parameters', ...
             'Separator', 'on', 'Checked', 'on', 'Callback', @onPlotParameters );
         
@@ -190,7 +194,7 @@ updateInterface();
                 'Style', 'text' );
             gui.Check_autoCalcA = uicontrol( 'Parent', parameterLayout2, ...
                 'Style', 'Checkbox', ...
-                'Callback', @()updateParameters );
+                'Callback', @updateParameters );
             
         gui.paramTable = uitable( 'Parent', parameterLayout1, ...
             'CellEditCallback', @updateTableData );
@@ -232,19 +236,6 @@ updateInterface();
         drawTable();
         
     end % updateInterface
-
-%-------------------------------------------------------------------------%
-    function redrawView()
-        % Draw a demo into the axes provided
-        
-        % We first clear the existing axes ready to build a new one
-        if ishandle( gui.ViewAxes )
-            delete( gui.ViewAxes );
-        end
-        
-        % Get rid of the opened figure
-        close( fig );
-    end % redrawDemo
 %-------------------------------------------------------------------------%
 
 %-------------------------------------------------------------------------%
@@ -286,6 +277,7 @@ updateInterface();
         set( gui.paramTable, ...
             'ColumnEditable', [true true true] );
         
+        
     end % redrawDemo
 %-------------------------------------------------------------------------%
 
@@ -303,7 +295,7 @@ updateInterface();
         % Get file path and name
         [FileName,PathName,filterindex] = ...
             uigetfile( '*.mat','Load Data Set', ...
-            'data/' );
+            data.lastFolder );
         
         % If user presses 'Cancel'
         if filterindex == 0
@@ -330,14 +322,14 @@ updateInterface();
         % Get file path and name
         [FileName,PathName,filterindex] = ...
             uiputfile( '*.mat','Save Data Set', ...
-            'data/' );
+            data.lastFolder );
         
         % If user presses 'Cancel'
         if filterindex == 0
             return
         end
         
-        DataSet = data.spectraData.DataSet;
+        DataSet = data.spectraData.DataSet; %#ok<NASGU>
         
         % Save the data set
         save( [PathName, '/', FileName], 'DataSet' );
@@ -353,7 +345,7 @@ updateInterface();
         % Get file path and name
         [FileName,PathName,filterindex] = ...
             uigetfile( '*.mat','Load Fit Parameters', ...
-            'data/' );
+            data.lastFolder );
         
         % If user presses 'Cancel'
         if filterindex == 0
@@ -379,19 +371,50 @@ updateInterface();
         % Get file path and name
         [FileName,PathName,filterindex] = ...
             uiputfile( '*.mat','Save Fit Parameters', ...
-            'data/' );
+            data.lastFolder );
         
         % If user presses 'Cancel'
         if filterindex == 0
             return
         end
         
-        parameters = data.parameters;
+        parameters = data.parameters; %#ok<NASGU>
         
         % Save the data set
         save( [PathName, '/', FileName], 'parameters' );
         
-    end    
+    end
+
+    %%%-----------------------------------------------------------------
+    %%% Loads fit model from a .fm file
+    %%%-----------------------------------------------------------------
+    function onLoadFitModel( ~, ~ )
+        
+        % Get file path and name
+        [FileName,PathName,filterindex] = ...
+            uigetfile( '*.fm','Load Fit Model', ...
+            data.lastFolder );
+        
+        % If user presses 'Cancel'
+        if filterindex == 0
+            return
+        end
+        
+        % Load the data
+        modelString = fileread(fullfile(PathName, FileName));
+        modelString = erase(modelString,' ');
+        modelString = replace(modelString, '/', './');
+        modelString = replace(modelString, '*', '.*');
+        modelString = replace(modelString, '^', '.^');
+        
+        data.fitModel = modelString;
+        
+        data.numPeaks = (numel(coeffnames(fittype(modelString)))-2)/3;
+        
+        % Update the interface
+        updateParameters()
+        drawTable();
+    end
 
     %%%-----------------------------------------------------------------
     %%% Plots the selected spectrum
@@ -421,14 +444,16 @@ updateInterface();
             end
             
             % Plot
-            p(i) = plot( h, xData,yData,'.' );
+            p(i) = plot( h, xData,yData,'.' ); %#ok<AGROW>
             
             % Set name on legend
-            p(i).DisplayName = data.spectraData.DataSet(value(i)).name;
+            p(i).DisplayName = data.spectraData.DataSet(value(i)).name; %#ok<AGROW>
             
             % Label the axes
-            xlabel(h,'Wavenumber'); ylabel(h,'Signal');
+            xlabel(h,'Wavenumber'); 
+            ylabel(h,'Signal');
             
+            % PLOT THE FITRESULT
             if isfield( data.spectraData.DataSet(value(i)), 'fitresult' ) ...
                     && ~isempty( data.spectraData.DataSet(value(i)).fitresult )
                 
@@ -437,7 +462,8 @@ updateInterface();
                 yFit = feval( fitResult, xFit );
                 
                 hold( h, 'on' );
-                plot( h, xFit, yFit, '-' )
+                fitPlot = plot( h, xFit, yFit, '-' );
+                fitPlot.Color = p(i).Color;
                 hold( h, 'off' );
                 
             end
@@ -460,6 +486,10 @@ updateInterface();
                 
                 hold( h, 'on' )
                 
+                % Need this variable to be called 'f' because it's
+                % evaluated somewhere else.
+                f = fittype( data.fitModel ); %#ok<NASGU>
+                
                 % Evaluate function
                 
                 parameters = [data.parameters.oscStrength, ...
@@ -471,12 +501,13 @@ updateInterface();
                 FitString = 'cfit(f';
                 
                 for m=1:numel( parameters )
-                    FitString = [FitString, ', ', num2str( parameters(m) )];
+                    FitString = strcat(FitString, ...
+                        ', ', ...
+                        num2str( parameters(m) ));
                 end
                 
-                FitString = [FitString, ')'];
-                    
-                f = fittype( data.fitModel );
+                FitString = strcat(FitString, ')');
+                
                 c = eval( FitString );
                 
                 xFit = linspace(xData(1),xData(end),1000);
@@ -541,7 +572,7 @@ updateInterface();
         
     end
 
-%%%-----------------------------------------------------------------
+    %%%-----------------------------------------------------------------
     %%% Draws a table with fitting parameters
     %%%-----------------------------------------------------------------
     function updateTableData( ~, callbackdata )
@@ -558,6 +589,11 @@ updateInterface();
 
     function onShowCoeffs( ~, ~ )        
         % Show Coefficients of fitresult if box is checked
+        if numel(data.spectraData.DataSet) == 0
+            disp('No data set loaded.')
+            gui.Check_showCoeffs.Value = false;
+            return
+        end
         
         % Get value of the checkbox
         value = gui.Check_showCoeffs.Value;
@@ -571,16 +607,19 @@ updateInterface();
             % Show fit parameters
             
             drawTable()
+            gui.paramTable.Enable = 'on';
             
         elseif value == 1 && fitIsAvailable == true
             % Show coefficients of fitresult
             
             showCoeffs()
+            gui.paramTable.Enable = 'off';
             
         else
             
             drawTable()
             disp('No fit data available')
+            gui.paramTable.Enable = 'on';
             
         end
         
@@ -909,8 +948,7 @@ updateInterface();
 %%% PROGRAM FUNCTIONS
 %-------------------------------------------------------------------------%
 
-    function startFit( spectraIdx )
-        
+    function startFit( spectraIdx )        
         
         for i=spectraIdx
             
@@ -918,12 +956,14 @@ updateInterface();
             
             % Output
             if data.doPrint
-                fprintf('Peak positions set to:\n')
-                disp(data.parameters.peakPos)
-                fprintf('Bounds: %g\n',data.parameters.peakPosLower)
-                fprintf('Damping coefficients set to:\n')
-                disp(data.parameters.dampingCoeffs)
-                fprintf('Bounds: %g\n',data.parameters.dampingCoeffsLower)
+                disp('Peak positions set to (pos | lower | upper):')
+                disp([data.parameters.peakPos', ...
+                    data.parameters.peakPosLower', ...
+                    data.parameters.peakPosUpper'])
+                disp('Damping coefficients set to (pos | lower | upper):')
+                disp([data.parameters.dampingCoeffs', ...
+                    data.parameters.dampingCoeffsLower', ...
+                    data.parameters.dampingCoeffsUpper'])
             end
             
             % Prepare wavenumber and signal data for fitting
@@ -937,7 +977,7 @@ updateInterface();
                 data.spectraData.DataSet(i).output] = ...
                 fit( xData, yData, data.fitModel, data.fitOpts );
             
-            coeffnames( data.spectraData.DataSet(i).fitresult )
+            disp(data.spectraData.DataSet(i).fitresult)
             
             % View Current Fit
             set( gui.Spectra, 'Value', i );
@@ -959,25 +999,25 @@ updateInterface();
         tableData = gui.paramTable.Data;
         
         % Get number of peaks
-        numPeaks = data.numPeaks;
+        n = data.numPeaks;
         
         % Write values to data structure
-        data.parameters.peakPos = tableData(end-numPeaks+1:end,1)';
-        data.parameters.peakPosLower = tableData(end-numPeaks+1:end,2)';
-        data.parameters.peakPosUpper = tableData(end-numPeaks+1:end,3)';
-        data.parameters.dampingCoeffs = tableData(numPeaks+1:2*numPeaks,1)';
-        data.parameters.dampingCoeffsLower = tableData(numPeaks+1:2*numPeaks,2)';
-        data.parameters.dampingCoeffsUpper = tableData(numPeaks+1:2*numPeaks,3)';
-        data.parameters.oscStrength = tableData(1:numPeaks,1)';
-        data.parameters.oscStrengthLower = tableData(1:numPeaks,2)';
-        data.parameters.oscStrengthUpper = tableData(1:numPeaks,3)';
-        data.parameters.nonResonant = tableData(2*numPeaks+1,1)';
-        data.parameters.nonResonantLower = tableData(2*numPeaks+1,2)';
-        data.parameters.nonResonantUpper = tableData(2*numPeaks+1,3)';
+        data.parameters.peakPos = tableData(end-n+1:end,1)';
+        data.parameters.peakPosLower = tableData(end-n+1:end,2)';
+        data.parameters.peakPosUpper = tableData(end-n+1:end,3)';
+        data.parameters.dampingCoeffs = tableData(n+1:2*n,1)';
+        data.parameters.dampingCoeffsLower = tableData(n+1:2*n,2)';
+        data.parameters.dampingCoeffsUpper = tableData(n+1:2*n,3)';
+        data.parameters.oscStrength = tableData(1:n,1)';
+        data.parameters.oscStrengthLower = tableData(1:n,2)';
+        data.parameters.oscStrengthUpper = tableData(1:n,3)';
+        data.parameters.nonResonant = tableData(2*n+1,1)';
+        data.parameters.nonResonantLower = tableData(2*n+1,2)';
+        data.parameters.nonResonantUpper = tableData(2*n+1,3)';
         
-        data.parameters.offset = tableData(2*numPeaks+2,1)';
-        data.parameters.offsetLower = tableData(2*numPeaks+2,2)';
-        data.parameters.offsetUpper = tableData(2*numPeaks+2,3)';
+        data.parameters.offset = tableData(2*n+2,1)';
+        data.parameters.offsetLower = tableData(2*n+2,2)';
+        data.parameters.offsetUpper = tableData(2*n+2,3)';
         
         updateCoefficients( gui.Spectra.Value )
     end
