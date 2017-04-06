@@ -632,7 +632,7 @@ updateInterface();
         
         % Open get file dialog
         [fileName,pathName,filterindex] = uigetfile(...
-            [data.lastFolder,'*.itx'],...
+            [data.lastFolder,'/*.itx'],...
             'Choose Files to Import',...
             'MultiSelect','on');
         
@@ -673,6 +673,14 @@ updateInterface();
             
             % Import itx file
             importData = fcn_itximport( fullPath, 'struct' );
+            
+            % Fields WLOPG and SigOsc1 are required. Check for these
+            if ~all(isfield(importData, {'WLOPG', 'SigOsc1'}))
+                disp('Could not find required field WLOPG or SigOsc1 in:')
+                disp(fullPath)
+                disp('Skipping this one.')
+                continue
+            end
             
 %             [signal,wavenumber,wavelength,temperature] = ...
 %                 fcn_sfgprocess( importData.WLOPG, importData.SigOsc1, ...
