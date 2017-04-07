@@ -36,9 +36,6 @@ updateInterface();
         % Print output to com~mand window?
         data.doPrint = true;
         
-        % Add smoothed line to spectrum
-        data.smoothed = false;
-        
         % Define Laser bandwidth
         data.laserBandwidth = 4.5;
         
@@ -120,7 +117,9 @@ updateInterface();
         uimenu( gui.FitMenu, 'Label', 'Load Fit Model ...', ...
             'Separator', 'off', 'Callback', @onLoadFitModel );
         gui.PlotParameters = uimenu( gui.FitMenu, 'Label', 'Plot Fit Parameters', ...
-            'Separator', 'on', 'Checked', 'on', 'Callback', @onPlotParameters );
+            'Separator', 'on', 'Checked', 'off', 'Callback', @onPlotParameters );
+        gui.PlotSmoothed = uimenu( gui.FitMenu, 'Label', 'Plot Fit Parameters', ...
+            'Separator', 'off', 'Checked', 'on', 'Callback', @()updateInterface() );
         
         % + Tools Menu
         gui.ToolsMenu = uimenu ( gui.Window, 'Label', 'Tools' );
@@ -468,11 +467,11 @@ updateInterface();
                 
             end
             
-            if data.smoothed
+            if strcmp(gui.PlotSmoothed.Checked, 'on')
                 % Plot smoothed line through spectrum
                 
                 for j=1:numel(p)
-                    ySmooth = smooth(yData,round( numel( yData)/15 ),'sgolay' );
+                    ySmooth = smooth(yData, 10,'loess' );
                     
                     hold( h, 'on' );
                     s = plot( h, xData, ySmooth, '-' );
