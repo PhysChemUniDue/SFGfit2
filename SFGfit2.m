@@ -76,6 +76,7 @@ updateInterface();
         gui = struct();
         % Open a window and add some menus
         gui.Window = figure( ...
+            'WindowStyle', 'normal', ...
             'Name', 'SFG fit', ...
             'NumberTitle', 'off', ...
             'MenuBar', 'none', ...
@@ -104,22 +105,37 @@ updateInterface();
         uimenu( gui.FileMenu, 'Label', 'Exit', ...
             'Separator', 'off', 'Callback', @onExit );
         
-        % + Fit Menu
-        gui.FitMenu = uimenu ( gui.Window, 'Label', 'Fit' );
-        uimenu( gui.FitMenu, 'Label', 'Single Fit', ...
+        % + FIT MENU
+        gui.FitMenu = uimenu ( gui.Window, ...
+            'Label', 'Fit' );
+        uimenu( gui.FitMenu, ...
+            'Label', 'Single Fit', ...
             'Callback', @onSingleFit );
-        uimenu( gui.FitMenu, 'Label', 'Batch Fit', ...
+        uimenu( gui.FitMenu, ...
+            'Label', 'Batch Fit', ...
             'Callback', @onBatchFit );
-        uimenu( gui.FitMenu, 'Label', 'Save Fit Parameters ...', ...
-            'Separator', 'on', 'Callback', @onSaveFitParameters );
-        uimenu( gui.FitMenu, 'Label', 'Load Fit Parameters ...', ...
-            'Separator', 'off', 'Callback', @onLoadFitParameters );
-        uimenu( gui.FitMenu, 'Label', 'Load Fit Model ...', ...
-            'Separator', 'off', 'Callback', @onLoadFitModel );
-        gui.PlotParameters = uimenu( gui.FitMenu, 'Label', 'Plot Fit Parameters', ...
-            'Separator', 'on', 'Checked', 'off', 'Callback', @onPlotParameters );
-        gui.PlotSmoothed = uimenu( gui.FitMenu, 'Label', 'Plot Fit Parameters', ...
-            'Separator', 'off', 'Checked', 'on', 'Callback', @()updateInterface() );
+        uimenu( gui.FitMenu, ...
+            'Label', 'Save Fit Parameters ...', ...
+            'Separator', 'on', ...
+            'Callback', @onSaveFitParameters );
+        uimenu( gui.FitMenu, ...
+            'Label', 'Load Fit Parameters ...', ...
+            'Separator', 'off', ...
+            'Callback', @onLoadFitParameters );
+        uimenu( gui.FitMenu, ...
+            'Label', 'Load Fit Model ...', ...
+            'Separator', 'off', ...
+            'Callback', @onLoadFitModel );
+        gui.PlotParameters = uimenu( gui.FitMenu, ...
+            'Label', 'Plot Fit Parameters', ...
+            'Separator', 'on', ...
+            'Checked', 'off', ...
+            'Callback', @onPlotParameters );
+        gui.PlotSmoothed = uimenu( gui.FitMenu, ...
+            'Label', 'Plot Smoothed Line', ...
+            'Separator', 'off', ...
+            'Checked', 'on', ...
+            'Callback', @onPlotSmoothed );
         
         % + Tools Menu
         gui.ToolsMenu = uimenu ( gui.Window, 'Label', 'Tools' );
@@ -213,8 +229,7 @@ updateInterface();
 
 %-------------------------------------------------------------------------%
     function updateInterface()
-        % Update various parts of the interface in response to boundary
-        % conditons being changed
+        % Update various parts of the interface
         
         % + Update boundary conditions information if the data exists. (It
         % doesn't when the program starts)
@@ -232,6 +247,8 @@ updateInterface();
             set( gui.Spectra, 'String', spectraNames )
         end % Update Interface
         
+        
+        onDataSelect([],[])
         drawTable();
         
     end % updateInterface
@@ -559,7 +576,7 @@ updateInterface();
     end
 
     %%%-----------------------------------------------------------------
-    %%% Executes fitting function for selected spectrum
+    %%% Plot the chosen start values of the fitting parameters
     %%%-----------------------------------------------------------------
     function onPlotParameters( ~, ~ )
         
@@ -568,6 +585,23 @@ updateInterface();
         else
             gui.PlotParameters.Checked = 'on';
         end
+        
+        updateInterface()
+        
+    end
+
+    %%%-----------------------------------------------------------------
+    %%% Plot a smoothed line through the spectrum
+    %%%-----------------------------------------------------------------
+    function onPlotSmoothed( ~, ~ )
+        
+        if strcmp(gui.PlotSmoothed.Checked,'on')
+            gui.PlotSmoothed.Checked = 'off';
+        else
+            gui.PlotSmoothed.Checked = 'on';
+        end
+        
+        updateInterface()
         
     end
 
@@ -747,11 +781,20 @@ updateInterface();
         end
         
         % Function
-        DataSet = ...
+        Combined = ...
             fcn_spectraCombineAverage( data.spectraData.DataSet(idx) );
         
+        fields = fieldnames(Combined);
         
-        data.spectraData.DataSet(end+1:end+numel(idx)) = DataSet;
+        % Expand the structure by copying the first entry
+        data.spectraData.DataSet(end+1) = data.spectraData.DataSet(1);
+        for f=1:numel(fields)
+            data.spectraData.DataSet(end).(fields{f}) = ...
+                Combined.(fields{f});
+        end
+        
+        updateInterface()
+        
     end
 
 %%%-----------------------------------------------------------------
