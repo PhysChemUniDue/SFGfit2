@@ -27,6 +27,33 @@ updateInterface();
         % Get the system defined monospaced font
         data.MonoFont = get(0, 'FixedWidthFontName');
         
+        %% ---------------------------------- %%
+        % CHECK FOR DEPENDENCIES
+        %  ---------------------------------- %%
+        
+        % Get names of available toolboxes
+        availToolboxes = ver();
+        toolboxNames = {availToolboxes.Name};
+        
+        dependencies = { ...
+            'GUI Layout Toolbox', ...   % UI
+            'boundedline.m' ...     % Shaded area as errors
+            };
+        
+        disp('Checking dependencies:')
+        for i=1:numel(dependencies)
+            fprintf('%s ... ', dependencies{i})
+            if any(strncmp(dependencies{i}, toolboxNames, numel(dependencies{i})))
+                % Check for toolboxes
+                fprintf('\tOK\n')
+            elseif exist(dependencies{i}, 'file') == 2
+                % Check for files
+                fprintf('\tOK\n')
+            else
+                fprintf('\tNOT FOUND\n')
+            end
+        end
+        
         % Create empty data set
         data.spectraData.DataSet = struct([]);
         
@@ -140,16 +167,6 @@ updateInterface();
             'Label', 'Load Fit Model ...', ...
             'Separator', 'off', ...
             'Callback', @onLoadFitModel );
-        gui.PlotParameters = uimenu( gui.FitMenu, ...
-            'Label', 'Plot Fit Parameters', ...
-            'Separator', 'on', ...
-            'Checked', 'off', ...
-            'Callback', @onPlotParameters );
-        gui.PlotSmoothed = uimenu( gui.FitMenu, ...
-            'Label', 'Plot Smoothed Line', ...
-            'Separator', 'off', ...
-            'Checked', 'on', ...
-            'Callback', @onPlotSmoothed );
         
         % + Tools Menu
         gui.ToolsMenu = uimenu ( gui.Window, ...
@@ -166,6 +183,25 @@ updateInterface();
         uimenu( gui.ToolsMenu, ...
             'Label', 'Print Info', ...
             'Callback', @onPrintInfo );
+        
+        % + VIEW menu
+        gui.ViewMenu = uimenu( gui.Window, ...
+            'Label', 'View' );
+        gui.PlotParameters = uimenu( gui.ViewMenu, ...
+            'Label', 'Plot Fit Parameters', ...
+            'Separator', 'off', ...
+            'Checked', 'off', ...
+            'Callback', @onPlotParameters );
+        gui.PlotSmoothed = uimenu( gui.ViewMenu, ...
+            'Label', 'Plot Smoothed Line', ...
+            'Separator', 'off', ...
+            'Checked', 'on', ...
+            'Callback', @onPlotSmoothed );
+        gui.ShowError = uimenu( gui.ViewMenu, ...
+            'Label', 'Show Error', ...
+            'Separator', 'off', ...
+            'Checked', 'on', ...
+            'Callback', @onShowError );
         
         % + FID Menu
         gui.FIDMenu = uimenu( gui.Window, ...
@@ -468,18 +504,18 @@ updateInterface();
         drawTable();
     end
 
-    %%%-----------------------------------------------------------------
-    %%% Plots the selected spectrum
-    %%%-----------------------------------------------------------------
+    %% -----------------------------------------------------------------
+    %  Plots the selected spectrum
+    %  -----------------------------------------------------------------
     function onDataSelect( ~, ~ )
         % Plot the data points
         
-        value = get(gui.Spectra, 'Value');
-        
-        if numel( value ) == 0
+        if isempty(gui.Spectra.String)
             % Return if nothing is selected
             return
         end
+        
+        value = get(gui.Spectra, 'Value');
         
         for i=1:numel( value )
                                    
@@ -495,8 +531,35 @@ updateInterface();
                 hold( h,'off' )
             end
             
-            % Plot
-            p(i) = plot( h, xData,yData,'.' ); %#ok<AGROW>
+            if strcmp(gui.ShowError.Checked, 'on') ...
+                    && isfield(data.spectraData.DataSet, 'error')
+                % PLOT MAKERS WITH ERRORBARS
+                                
+                yError = data.spectraData.DataSet.error;
+                
+                if exist('boundedline.m', 'file') == 2
+                    % Check if the dependency is there
+                    
+                    if numel(value) == 1
+                        % For some reason boundedline does not react to the
+                        % hold off command. So we have to clear the axes
+                        % manually
+                        cla(h)
+                    end
+                    
+                    [p(i), e(i)] = boundedline(h, xData, yData, yError, ...
+                        '.', ...
+                        'Transparency', 0.2); %#ok
+                    
+                else
+                    % Plot with standard errorbars otherwise
+                    p(i) = errorbar(h, xData, yData, yError, '.'); %#ok
+                end
+                             
+            else
+                % REGULAR PLOT OF THE DATA POINTS                
+                p(i) = plot( h, xData,yData,'.' ); %#ok<AGROW>
+            end
             
             % Set name on legend
             p(i).DisplayName = data.spectraData.DataSet(value(i)).name; %#ok<AGROW>
@@ -532,7 +595,7 @@ updateInterface();
                     hold( h, 'off' );
                 end
                 
-            end
+            end        
             
             if strcmp(gui.PlotParameters.Checked,'on')
                 
@@ -585,9 +648,9 @@ updateInterface();
         
     end
 
-    %%%-----------------------------------------------------------------
-    %%% Executes fitting function for all available spectra
-    %%%-----------------------------------------------------------------
+    %% -----------------------------------------------------------------
+    %  Executes fitting function for all available spectra
+    %  -----------------------------------------------------------------
     function onBatchFit( ~, ~ )
         
         % Get number of spectra to fit
@@ -635,6 +698,21 @@ updateInterface();
             gui.PlotSmoothed.Checked = 'off';
         else
             gui.PlotSmoothed.Checked = 'on';
+        end
+        
+        updateInterface()
+        
+    end
+    
+    %%%-----------------------------------------------------------------
+    %%% Switches view modes between with and without errors
+    %%%-----------------------------------------------------------------
+    function onShowError( ~, ~ )
+        
+        if strcmp(gui.ShowError.Checked,'on')
+            gui.ShowError.Checked = 'off';
+        else
+            gui.ShowError.Checked = 'on';
         end
         
         updateInterface()
@@ -723,16 +801,13 @@ updateInterface();
         data.lastFolder = pathName;
         
         % Print info to command window
-        fprintf( 'Importing %g files...\n', numel( fileName ) )
+        fprintf( 'Importing %g files ', numel( fileName ) )
         
-%         DataSet = struct([]);
-        DataSet = struct('signal',[],...
-            'wavenumber',[],...
-            'wavelength',[],...
-            'settings',[],...
-            'temperature',[]);
+        DataSet = struct();
         
-        for i=numel( fileName ):-1:1
+        for i=1:numel( fileName )
+            
+            fprintf('#')
             
             % Define full path to file (including file)
             fullPath = [pathName, fileName{i}];
@@ -750,29 +825,19 @@ updateInterface();
                 disp('Skipping this one.')
                 continue
             end
-            
-%             [signal,wavenumber,wavelength,temperature] = ...
-%                 fcn_sfgprocess( importData.WLOPG, importData.SigOsc1, ...
-%                 importData.SigDet1 );
-%             
-%             DataSet(i).signal = signal*10e10;
-%             DataSet(i).wavenumber = wavenumber;
-%             DataSet(i).wavelength = wavelength;
-%             DataSet(i).temperature = temperature;
 
-            DataSet(i) = ...
+            importedData = ...
                 fcn_sfgprocess( importData.WLOPG, importData.SigOsc1, ...
                 importData.SigDet1 );
             
-            n(i).name = name;
+            fields = fieldnames(importedData);
+
+            for f=1:numel(fields)
+                DataSet(i).(fields{f}) = importedData.(fields{f});
+            end
             
-        end
-        
-        for i=1:numel( DataSet )
-            % Set names (somehow not possible to do it in the above loop)
+            DataSet(i).name = name;
             
-            % Set name of the spectrum
-            DataSet(i).name = n(i).name;
         end
         
         if numel( data.spectraData.DataSet ) < 1
@@ -785,7 +850,7 @@ updateInterface();
         
         updateInterface();
         onDataSelect();
-        fprintf( '\tDone.\n' )
+        fprintf( '\n\tDone.\n' )
         
     end
 
