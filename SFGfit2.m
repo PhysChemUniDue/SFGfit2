@@ -63,6 +63,9 @@ updateInterface();
         % Print output to com~mand window?
         data.doPrint = true;
         
+        % Plot Colors
+        data.ColorOrder = lines();
+        
         % Define Laser bandwidth
         data.laserBandwidth = 4.5;
         
@@ -187,10 +190,14 @@ updateInterface();
         % + VIEW menu
         gui.ViewMenu = uimenu( gui.Window, ...
             'Label', 'View' );
+        gui.ShowResiduals = uimenu( gui.ViewMenu, ...
+            'Label', 'Plot Residuals (New Figure)', ...
+            'Callback', @onPlotResiduals);
         gui.PlotParameters = uimenu( gui.ViewMenu, ...
             'Label', 'Plot Fit Parameters', ...
             'Separator', 'off', ...
             'Checked', 'off', ...
+            'Separator', 'on', ...
             'Callback', @onPlotParameters );
         gui.PlotSmoothed = uimenu( gui.ViewMenu, ...
             'Label', 'Plot Smoothed Line', ...
@@ -198,12 +205,38 @@ updateInterface();
             'Checked', 'on', ...
             'Callback', @onPlotSmoothed );
         gui.ShowError = uimenu( gui.ViewMenu, ...
-            'Label', 'Show Error', ...
+            'Label', 'Show Standard Deviation', ...
             'Separator', 'off', ...
-            'Checked', 'on', ...
+            'Checked', 'off', ...
             'Callback', @onShowError );
-        
-        % + FID Menu
+        gui.PredictionIntervalsMenu = uimenu(gui.ViewMenu, ...
+            'Label', 'Prediction Intervals...');
+            gui.ShowPredictionIntervalsSF = uimenu( ...
+                gui.PredictionIntervalsMenu, ...
+                'Label', 'Nonsimultaneuos Functional', ...
+                'Separator', 'off', ...
+                'Checked', 'off', ...
+                'Callback', @onShowPredictionIntervalsSF );
+            gui.ShowPredictionIntervalsNF = uimenu( ...
+                gui.PredictionIntervalsMenu, ...
+                'Label', 'Simultaneuos Functional', ...
+                'Separator', 'off', ...
+                'Checked', 'off', ...
+                'Callback', @onShowPredictionIntervalsNF );
+            gui.ShowPredictionIntervalsSO = uimenu( ...
+                gui.PredictionIntervalsMenu, ...
+                'Label', 'Nonsimultaneuos Observation', ...
+                'Separator', 'off', ...
+                'Checked', 'off', ...
+                'Callback', @onShowPredictionIntervalsSO );
+            gui.ShowPredictionIntervalsNO = uimenu( ...
+                gui.PredictionIntervalsMenu, ...
+                'Label', 'Simultaneuos Observation', ...
+                'Separator', 'off', ...
+                'Checked', 'off', ...
+                'Callback', @onShowPredictionIntervalsNO );
+            
+            % + FID Menu
         gui.FIDMenu = uimenu( gui.Window, ...
             'Label', 'FID' );
         uimenu( gui.FIDMenu, ...
@@ -518,7 +551,8 @@ updateInterface();
         value = get(gui.Spectra, 'Value');
         
         for i=1:numel( value )
-                                   
+            
+            %% RAW DATA PLOT
             xData = data.spectraData.DataSet(value(i)).wavenumber;
             yData = data.spectraData.DataSet(value(i)).signal;
             
@@ -548,8 +582,9 @@ updateInterface();
                     end
                     
                     [p(i), e(i)] = boundedline(h, xData, yData, yError, ...
-                        '.', ...
-                        'Transparency', 0.2); %#ok
+                        '.', 'alpha', ...
+                        'Transparency', 0.1); %#ok
+                    e(i).FaceColor = data.ColorOrder(i,:);
                     
                 else
                     % Plot with standard errorbars otherwise
@@ -561,6 +596,9 @@ updateInterface();
                 p(i) = plot( h, xData,yData,'.' ); %#ok<AGROW>
             end
             
+            % Set Color
+            p(i).Color = data.ColorOrder(i,:); %#ok
+            
             % Set name on legend
             p(i).DisplayName = data.spectraData.DataSet(value(i)).name; %#ok<AGROW>
             
@@ -568,7 +606,8 @@ updateInterface();
             xlabel(h,'Wavenumber'); 
             ylabel(h,'Signal');
             
-            % PLOT THE FITRESULT
+            
+            %% PLOT THE FITRESULT
             if isfield( data.spectraData.DataSet(value(i)), 'fitresult' ) ...
                     && ~isempty( data.spectraData.DataSet(value(i)).fitresult )
                 
@@ -579,10 +618,41 @@ updateInterface();
                 hold( h, 'on' );
                 fitPlot = plot( h, xFit, yFit, '-' );
                 fitPlot.Color = p(i).Color;
+                
+                % Plot PREDICTION INTERVALS if selected
+                if strcmp(gui.ShowPredictionIntervalsSF.Checked, 'on') || ...
+                        strcmp(gui.ShowPredictionIntervalsNF.Checked, 'on') || ...
+                        strcmp(gui.ShowPredictionIntervalsSO.Checked, 'on') || ...
+                        strcmp(gui.ShowPredictionIntervalsNO.Checked, 'on')
+                    
+                    if strcmp(gui.ShowPredictionIntervalsSF.Checked, 'on')
+                        intopt = 'functional';
+                        simopt = 'on';
+                    elseif strcmp(gui.ShowPredictionIntervalsNF.Checked, 'on')
+                        intopt = 'functional';
+                        simopt = 'off';
+                    elseif strcmp(gui.ShowPredictionIntervalsSO.Checked, 'on')
+                        intopt = 'observation';
+                        simopt = 'on';
+                    elseif strcmp(gui.ShowPredictionIntervalsNO.Checked, 'on')
+                        intopt = 'observation';
+                        simopt = 'off';
+                    else
+                        disp('Error while plotting prediction Intervals')
+                        continue
+                    end                 
+                    
+                    yPred = predint( fitResult, xFit, 0.95, intopt, simopt);
+                    plot( h, xFit, yPred, '--', 'Color', p(i).Color, ...
+                        'LineWidth', 1);
+                end
+                
                 hold( h, 'off' );
                 
             end
             
+            
+            %% PLOT SMOOTHED LINE
             if strcmp(gui.PlotSmoothed.Checked, 'on')
                 % Plot smoothed line through spectrum
                 
@@ -597,6 +667,8 @@ updateInterface();
                 
             end        
             
+            
+            %% PLOT CURVE FROM ENTERED FIT PARAMETERS
             if strcmp(gui.PlotParameters.Checked,'on')
                 
                 hold( h, 'on' )
@@ -629,7 +701,7 @@ updateInterface();
                 yFit = feval( c, xFit );
                 
                 hold( h, 'on' );
-                plot( h, xFit, yFit, '-' )
+                plot( h, xFit, yFit, 'k--', 'LineWidth', 1 )
                 hold( h, 'off' );
                 
                 hold( h, 'off' )
@@ -646,7 +718,7 @@ updateInterface();
         
         updateParameters();
         
-    end
+    end % onDataSelect
 
     %% -----------------------------------------------------------------
     %  Executes fitting function for all available spectra
@@ -663,6 +735,52 @@ updateInterface();
     
     %%%-----------------------------------------------------------------
     %%% Executes fitting function for selected spectrum
+    %%%-----------------------------------------------------------------
+    function onPlotResiduals( ~, ~ )
+               
+        % Get selected spectra
+        spectraIdx = get( gui.Spectra, 'Value' );
+        
+        % External figure window
+        figure();
+        hold(gca, 'on')  
+        
+        for i=1:numel(spectraIdx)
+            
+            % Check if a fit object exists
+            if isempty(data.spectraData.DataSet(i).fitresult)
+                % Retrun if not
+                warning('There is no fit for the selected spectrum')
+                continue
+            else
+                yFit = data.spectraData.DataSet(i).fitresult( ...
+                    data.spectraData.DataSet(i).wavenumber);
+                p = plot(data.spectraData.DataSet(i).wavenumber', ...
+                    data.spectraData.DataSet(i).signal' - yFit, ...
+                    'o:');
+                p.Color = data.ColorOrder(i,:);
+                p.DisplayName = data.spectraData.DataSet(i).name;
+                p.LineWidth = 1;
+                xlabel('Wavenumber')
+                ylabel('Residuals from Signal')
+                title('Residual Plot')
+            end
+            
+        end
+        
+        % Plot zero line
+        ax = gca;
+        plot([ax.XLim(1), ax.XLim(2)], [0, 0], 'k-', ...
+            'DisplayName', 'zero line')
+        legend('show')
+        ax.Legend.Interpreter = 'none';
+        
+        hold(gca, 'off')
+        
+    end
+    
+    %%%-----------------------------------------------------------------
+    %%% Shows a new figure with the residuals of the fit
     %%%-----------------------------------------------------------------
     function onSingleFit( ~, ~ )
                
@@ -717,7 +835,60 @@ updateInterface();
         
         updateInterface()
         
+    end  
+    
+
+    %%%-----------------------------------------------------------------
+    %%% Switches PREDICTION INTERVALS
+    %%%-----------------------------------------------------------------
+    function onShowPredictionIntervalsSF( ~, ~ )
+        
+        if strcmp(gui.ShowPredictionIntervalsSF.Checked,'on')
+            gui.ShowPredictionIntervalsSF.Checked = 'off';
+        else
+            gui.ShowPredictionIntervalsSF.Checked = 'on';
+        end
+        
+        updateInterface()
+        
     end
+
+    function onShowPredictionIntervalsNF( ~, ~ )
+        
+        if strcmp(gui.ShowPredictionIntervalsNF.Checked,'on')
+            gui.ShowPredictionIntervalsNF.Checked = 'off';
+        else
+            gui.ShowPredictionIntervalsNF.Checked = 'on';
+        end
+        
+        updateInterface()
+        
+    end
+
+    function onShowPredictionIntervalsSO( ~, ~ )
+        
+        if strcmp(gui.ShowPredictionIntervalsSO.Checked,'on')
+            gui.ShowPredictionIntervalsSO.Checked = 'off';
+        else
+            gui.ShowPredictionIntervalsSO.Checked = 'on';
+        end
+        
+        updateInterface()
+        
+    end
+
+    function onShowPredictionIntervalsNO( ~, ~ )
+        
+        if strcmp(gui.ShowPredictionIntervalsNO.Checked,'on')
+            gui.ShowPredictionIntervalsNO.Checked = 'off';
+        else
+            gui.ShowPredictionIntervalsNO.Checked = 'on';
+        end
+        
+        updateInterface()
+        
+    end
+    
 
     %%%-----------------------------------------------------------------
     %%% Draws a table with fitting parameters
