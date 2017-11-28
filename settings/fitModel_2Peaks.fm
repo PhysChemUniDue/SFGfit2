@@ -1,0 +1,1 @@
+Offset + abs(NR+A01/(w01-x-1i*G01)+A02/(w02-x-1i*G02))^2
