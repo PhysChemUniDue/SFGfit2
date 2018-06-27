@@ -129,6 +129,9 @@ updateInterface();
             uimenu( gui.ImportMenu, ...
                 'Label', 'Process ITX Files ...', ...
                 'Callback', @onProcessITX );
+            uimenu( gui.ImportMenu, ...
+                'Label', 'Import Julia-Generated MAT File ...', ...
+                'Callback', @onImportJMat );
         uimenu( gui.FileMenu, ...
             'Label', 'Edit Settings ...', ...
             'Separator', 'on', ...
@@ -1023,6 +1026,41 @@ updateInterface();
         fprintf( '\n\tDone.\n' )
 
     end
+
+%%%-----------------------------------------------------------------
+%%% Import Julia Generated Mat File
+%%%-----------------------------------------------------------------
+    function onImportJMat( ~, ~ )
+        disp('Importing ...')
+        
+        % Open get file dialog
+        [fileName,pathName,filterindex] = uigetfile(...
+            [data.lastFolder,'/*.mat'],...
+            'Choose File to Import',...
+            'MultiSelect','off');
+
+        % If user presses 'Cancel'
+        if filterindex == 0
+            return
+        end
+
+        DataSet = fcn_juliamatimport([pathName, fileName]);
+
+        numel(DataSet)
+        
+        if numel( data.spectraData.DataSet ) < 1
+            data.spectraData.DataSet = DataSet;
+        else
+            % Put new spectra at the end of the data set
+            data.spectraData.DataSet = [data.spectraData.DataSet, DataSet];
+        end
+
+        updateInterface();
+        onDataSelect();
+        fprintf( '\n\tDone.\n' )
+
+    end
+
 
 %%%-----------------------------------------------------------------
 %%% Apply Reference Spectrum
