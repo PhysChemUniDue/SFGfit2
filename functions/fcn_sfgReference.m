@@ -40,10 +40,10 @@ function [GaAsSig,GaAsWN,GaAsWL] = loadReference()
 lastFolder = pathname;
 
 % Import itx file
-data = itximport( [pathname filename],'struct' );
+data = fcn_itximport( [pathname filename],'struct' );
 
 % Process GaAs spectrum
-[GaAsSig,GaAsWN,GaAsWL,~] = fcn_sfgprocess( data.WLOPG, ...
+[GaAsSig,GaAsWN,GaAsWL] = fcn_sfgprocess( data.WLOPG, ...
     data.SigOsc1, data.SigDet1 );
 
 % Amplify Signal
