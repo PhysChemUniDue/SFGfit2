@@ -125,13 +125,22 @@ updateInterface();
             'Callback', @onSaveData );
         gui.ImportMenu = uimenu( gui.FileMenu, ...
             'Label', 'Import', ...
-            'Separator', 'on' );
+            'Separator', 'off' );
             uimenu( gui.ImportMenu, ...
                 'Label', 'Process ITX Files ...', ...
                 'Callback', @onProcessITX );
             uimenu( gui.ImportMenu, ...
                 'Label', 'Import Julia-Generated MAT File ...', ...
                 'Callback', @onImportJMat );
+            uimenu( gui.ImportMenu, ...
+                'Label', 'Import JSON File ...', ...
+                'Callback', @onImportJSON );
+        gui.ExportMenu = uimenu( gui.FileMenu, ...
+            'Label', 'Export', ...
+            'Separator', 'on' );
+            uimenu( gui.ExportMenu, ...
+                'Label', 'Fit Data as CSV ...', ...
+                'Callback', @onExportCSV );
         uimenu( gui.FileMenu, ...
             'Label', 'Edit Settings ...', ...
             'Separator', 'on', ...
@@ -1059,6 +1068,99 @@ updateInterface();
         onDataSelect();
         fprintf( '\n\tDone.\n' )
 
+    end
+
+
+%%%-----------------------------------------------------------------
+%%% Import Julia Generated Mat File
+%%%-----------------------------------------------------------------
+
+    function onImportJSON( ~, ~ )
+        
+        % Open get file dialog
+        [fileName,pathName,filterindex] = uigetfile(...
+            [data.lastFolder,'/*.json'],...
+            'Choose File to Import',...
+            'MultiSelect','off');
+
+        % If user presses 'Cancel'
+        if filterindex == 0
+            return
+        end
+        
+        fid = fopen([pathName, fileName]);
+        raw = fread(fid, inf);
+        fclose(fid);
+        str = char(raw');
+        val = jsondecode(str);
+
+        DataSet = struct();
+
+        for i = 1:numel(val.ids)
+            DataSet(i).name = val.names{i};
+            DataSet(i).signal = val.signals(i,:);
+            DataSet(i).wavelength = val.wavelengths(i,:);
+            DataSet(i).wavenumber = val.wavenumbers(i,:);
+            DataSet(i).id = val.ids(i);
+        end
+        
+        if numel( data.spectraData.DataSet ) < 1
+            data.spectraData.DataSet = DataSet;
+        else
+            % Put new spectra at the end of the data set
+            data.spectraData.DataSet = [data.spectraData.DataSet, DataSet];
+        end
+        
+        % Remember folder
+        data.lastFolder = pathName;
+        
+        updateInterface();
+        onDataSelect();
+        
+    end
+
+
+%%%-----------------------------------------------------------------
+%%% Export Fit Data as CSV File
+%%%-----------------------------------------------------------------
+
+    function onExportCSV( ~, ~ )
+        
+    % Get file path and name
+    [FileName,PathName,filterindex] = ...
+        uiputfile( '*.csv','Save Fit Data', ...
+        data.lastFolder );
+
+    % If user presses 'Cancel'
+    if filterindex == 0
+        return
+    end
+
+    DataSet = data.spectraData.DataSet;
+
+    header = {'id'};
+    names = coeffnames(DataSet(1).fitresult);
+    header = cat(2, header, names');
+
+    values = zeros(numel(DataSet), numel(header));
+    for i = 1:numel(DataSet)
+        if isfield(DataSet(i), 'id')
+            values(i,1) = DataSet(i).id;
+        else
+            values(i,1) = DataSet(i).name;
+        end
+        
+        if ~isempty(DataSet(i).fitresult)
+            values(i,2:end) = coeffvalues(DataSet(i).fitresult);
+        else
+            values(i,2:end) = NaN;
+        end
+    end
+
+    T = array2table(values, 'VariableNames', header);
+
+    writetable(T, [PathName, FileName])
+        
     end
 
 
