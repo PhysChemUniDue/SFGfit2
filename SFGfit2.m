@@ -140,9 +140,9 @@ updateInterface();
             uimenu( gui.ExportMenu, ...
                 'Label', 'Fit Parameters as CSV ...', ...
                 'Callback', @onExportCSV );
-%             uimenu( gui.ExportMenu, ...
-%                 'Label', 'Fit Curves as CSV ...', ...
-%                 'Callback', @onExportFitCurves );
+            uimenu( gui.ExportMenu, ...
+                'Label', 'Fit Curves as CSV ...', ...
+                'Callback', @onExportFitCurves );
         uimenu( gui.FileMenu, ...
             'Label', 'Edit Settings ...', ...
             'Separator', 'on', ...
@@ -1166,45 +1166,46 @@ updateInterface();
     end
 
 
-%%%-----------------------------------------------------------------
-%%% Export Fit Curves as CSV File
-%%%-----------------------------------------------------------------
+%%-----------------------------------------------------------------
+%% Export Fit Curves as CSV File
+%%-----------------------------------------------------------------
 
-%     function onExportFitCurves( ~, ~ )
-%         
-%     % Get file path and name
-%     [FileName,PathName,filterindex] = ...
-%         uiputfile( '*.csv','Save Fit Curves', ...
-%         data.lastFolder );
-% 
-%     % If user presses 'Cancel'
-%     if filterindex == 0
-%         return
-%     end
-% 
-%     DataSet = data.spectraData.DataSet;
-% 
-%     values = zeros(numel(DataSet), numel(header));
-%     
-%     for i = 1:numel(DataSet)
-%         if isfield(DataSet(i), 'id')
-%             values(i,1) = DataSet(i).id;
-%         else
-%             values(i,1) = i;
-%         end
-%         
-%         if ~isempty(DataSet(i).fitresult)
-%             values(i,2:end) = coeffvalues(DataSet(i).fitresult);
-%         else
-%             values(i,2:end) = NaN;
-%         end
-%     end
-% 
-%     T = array2table(values, 'VariableNames', header);
-% 
-%     writetable(T, [PathName, FileName])
-%         
-%     end
+    function onExportFitCurves( ~, ~ )
+        
+    % Get file path and name
+    [FileName,PathName,filterindex] = ...
+        uiputfile( '*.csv','Save Fit Curves', ...
+        data.lastFolder );
+
+    % If user presses 'Cancel'
+    if filterindex == 0
+        return
+    end
+    
+    % Number of Data Points
+    n = 200;
+
+    DataSet = data.spectraData.DataSet;
+    
+    value = get(gui.Spectra, 'Value');
+
+    values = zeros(n, 2*numel(value));
+    header = cell(1, 2*numel(value));
+
+    for i=1:numel( value )
+        header{2*i - 1} = strip(['wavenumber_' DataSet(i).name]);
+        header{2*i} = strip(['fitvalues_' DataSet(i).name]);
+        wavenumbers = DataSet(i).wavenumber;
+        xvals = linspace(min(wavenumbers), max(wavenumbers), n);
+        values(:,2*i-1) = xvals;
+        values(:,2*i) = DataSet(i).fitresult(xvals);
+    end
+
+    T = array2table(values, 'VariableNames', header);
+
+    writetable(T, [PathName, FileName])
+        
+    end
 
 %%%-----------------------------------------------------------------
 %%% Apply Reference Spectrum
