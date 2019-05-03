@@ -1,0 +1,1 @@
+Offset + abs(NR * exp(1i * 0) + A01/(w01-x-1i*G01)*exp(1i*phi01) + A02/(w02-x-1i*G02)*exp(1i*phi02)  + A03/(w03-x-1i*G03)*exp(1i*phi03)  + A04/(w04-x-1i*G04)*exp(1i*phi04)  + A05/(w05-x-1i*G05)*exp(1i*phi05) + A06/(w06-x-1i*G06)*exp(1i*phi06) )^2

@@ -76,14 +76,13 @@ updateInterface();
             parameters = load( 'settings/defaultParameters.mat' );
 
             % Add to data struct
-            data.parameters = parameters.parameters;
+            data.parameters = parameters.parameters
 
         end
 
 
         % Settings
         data.fitModel = fileread('settings/defaultFitModel.fm');
-        data.numPeaks = 5;
 
         % Configure fit options
         data.fitOpts = fitoptions( 'Method', 'NonlinearLeastSquares' );
@@ -92,8 +91,8 @@ updateInterface();
         data.fitOpts.DiffMaxChange = 10e-6;
         data.fitOpts.DiffMinChange = 10e-8;
         data.fitOpts.Display = 'notify';
-        data.fitOpts.MaxFunEvals = 1e8;
-        data.fitOpts.MaxIter = 1e5;
+        data.fitOpts.MaxFunEvals = 1e4;
+        data.fitOpts.MaxIter = 1e3;
         data.fitOpts.TolFun = 1e-6;
         data.fitOpts.TolX = 1e-6;
 
@@ -139,8 +138,11 @@ updateInterface();
             'Label', 'Export', ...
             'Separator', 'on' );
             uimenu( gui.ExportMenu, ...
-                'Label', 'Fit Data as CSV ...', ...
+                'Label', 'Fit Parameters as CSV ...', ...
                 'Callback', @onExportCSV );
+%             uimenu( gui.ExportMenu, ...
+%                 'Label', 'Fit Curves as CSV ...', ...
+%                 'Callback', @onExportFitCurves );
         uimenu( gui.FileMenu, ...
             'Label', 'Edit Settings ...', ...
             'Separator', 'on', ...
@@ -384,21 +386,22 @@ updateInterface();
         cnames = {'Start', 'Lower', 'Upper'};
 
         % Get table data
-        d = [data.parameters.oscStrength, ...
-            data.parameters.dampingCoeffs, ...
-            data.parameters.nonResonant, ...
-            data.parameters.offset, ...
-            data.parameters.peakPos;
-            data.parameters.oscStrengthLower, ...
-            data.parameters.dampingCoeffsLower, ...
-            data.parameters.nonResonantLower, ...
-            data.parameters.offsetLower, ...
-            data.parameters.peakPosLower;
-            data.parameters.oscStrengthUpper, ...
-            data.parameters.dampingCoeffsUpper, ...
-            data.parameters.nonResonantUpper, ...
-            data.parameters.offsetUpper, ...
-            data.parameters.peakPosUpper]';
+%         d = [data.parameters.oscStrength, ...
+%             data.parameters.dampingCoeffs, ...
+%             data.parameters.nonResonant, ...
+%             data.parameters.offset, ...
+%             data.parameters.peakPos;
+%             data.parameters.oscStrengthLower, ...
+%             data.parameters.dampingCoeffsLower, ...
+%             data.parameters.nonResonantLower, ...
+%             data.parameters.offsetLower, ...
+%             data.parameters.peakPosLower;
+%             data.parameters.oscStrengthUpper, ...
+%             data.parameters.dampingCoeffsUpper, ...
+%             data.parameters.nonResonantUpper, ...
+%             data.parameters.offsetUpper, ...
+%             data.parameters.peakPosUpper]';
+        d = zeros(numel(rnames), 3);
 
         % Set row and column names and other parameters
         set( gui.paramTable, ...
@@ -488,10 +491,10 @@ updateInterface();
         parameters = load( [PathName, '/', FileName] );
 
         % Add to data struct
-        data.parameters = parameters.parameters;
+        gui.paramTable.Data = parameters.parameters;
 
         % Update the interface
-        drawTable();
+%         updateTableData();
     end
 
     %%%-----------------------------------------------------------------
@@ -510,7 +513,7 @@ updateInterface();
             return
         end
 
-        parameters = data.parameters; %#ok<NASGU>
+        parameters = gui.paramTable.Data; %#ok<NASGU>
 
         % Save the data set
         save( [PathName, '/', FileName], 'parameters' );
@@ -541,8 +544,6 @@ updateInterface();
 
         data.fitModel = modelString;
 
-        data.numPeaks = (numel(coeffnames(fittype(modelString)))-2)/3;
-
         % Update the interface
         updateParameters()
         drawTable();
@@ -562,7 +563,7 @@ updateInterface();
         value = get(gui.Spectra, 'Value');
 
         for i=1:numel( value )
-
+            
             %% RAW DATA PLOT
             xData = data.spectraData.DataSet(value(i)).wavenumber;
             yData = data.spectraData.DataSet(value(i)).signal;
@@ -608,7 +609,12 @@ updateInterface();
             end
 
             % Set Color
-            p(i).Color = data.ColorOrder(i,:); %#ok
+            if i > size(data.ColorOrder, 1)
+                c = i - size(data.ColorOrder, 1);
+            else
+                c = i;
+            end
+            p(i).Color = data.ColorOrder(c,:); %#ok
 
             % Set name on legend
             p(i).DisplayName = data.spectraData.DataSet(value(i)).name; %#ok<AGROW>
@@ -690,11 +696,7 @@ updateInterface();
 
                 % Evaluate function
 
-                parameters = [data.parameters.oscStrength, ...
-                    data.parameters.dampingCoeffs, ...
-                    data.parameters.nonResonant, ...
-                    data.parameters.offset, ...
-                    data.parameters.peakPos];
+                parameters = gui.paramTable.Data(:,1);
 
                 FitString = 'cfit(f';
 
@@ -1121,7 +1123,7 @@ updateInterface();
 
 
 %%%-----------------------------------------------------------------
-%%% Export Fit Data as CSV File
+%%% Export Fit Parameters as CSV File
 %%%-----------------------------------------------------------------
 
     function onExportCSV( ~, ~ )
@@ -1147,7 +1149,7 @@ updateInterface();
         if isfield(DataSet(i), 'id')
             values(i,1) = DataSet(i).id;
         else
-            values(i,1) = DataSet(i).name;
+            values(i,1) = i;
         end
         
         if ~isempty(DataSet(i).fitresult)
@@ -1163,6 +1165,46 @@ updateInterface();
         
     end
 
+
+%%%-----------------------------------------------------------------
+%%% Export Fit Curves as CSV File
+%%%-----------------------------------------------------------------
+
+%     function onExportFitCurves( ~, ~ )
+%         
+%     % Get file path and name
+%     [FileName,PathName,filterindex] = ...
+%         uiputfile( '*.csv','Save Fit Curves', ...
+%         data.lastFolder );
+% 
+%     % If user presses 'Cancel'
+%     if filterindex == 0
+%         return
+%     end
+% 
+%     DataSet = data.spectraData.DataSet;
+% 
+%     values = zeros(numel(DataSet), numel(header));
+%     
+%     for i = 1:numel(DataSet)
+%         if isfield(DataSet(i), 'id')
+%             values(i,1) = DataSet(i).id;
+%         else
+%             values(i,1) = i;
+%         end
+%         
+%         if ~isempty(DataSet(i).fitresult)
+%             values(i,2:end) = coeffvalues(DataSet(i).fitresult);
+%         else
+%             values(i,2:end) = NaN;
+%         end
+%     end
+% 
+%     T = array2table(values, 'VariableNames', header);
+% 
+%     writetable(T, [PathName, FileName])
+%         
+%     end
 
 %%%-----------------------------------------------------------------
 %%% Apply Reference Spectrum
@@ -1415,17 +1457,17 @@ updateInterface();
 
             updateCoefficients(i);
 
-            % Output
-            if data.doPrint
-                disp('Peak positions set to (pos | lower | upper):')
-                disp([data.parameters.peakPos', ...
-                    data.parameters.peakPosLower', ...
-                    data.parameters.peakPosUpper'])
-                disp('Damping coefficients set to (pos | lower | upper):')
-                disp([data.parameters.dampingCoeffs', ...
-                    data.parameters.dampingCoeffsLower', ...
-                    data.parameters.dampingCoeffsUpper'])
-            end
+%             % Output
+%             if data.doPrint
+%                 disp('Peak positions set to (pos | lower | upper):')
+%                 disp([data.parameters.peakPos', ...
+%                     data.parameters.peakPosLower', ...
+%                     data.parameters.peakPosUpper'])
+%                 disp('Damping coefficients set to (pos | lower | upper):')
+%                 disp([data.parameters.dampingCoeffs', ...
+%                     data.parameters.dampingCoeffsLower', ...
+%                     data.parameters.dampingCoeffsUpper'])
+%             end
 
             % Prepare wavenumber and signal data for fitting
             wavenumber = data.spectraData.DataSet(i).wavenumber;
@@ -1457,81 +1499,69 @@ updateInterface();
         end
 
         % Get data from table
-        tableData = gui.paramTable.Data;
-
-        % Get number of peaks
-        n = data.numPeaks;
-
-        % Write values to data structure
-        data.parameters.peakPos = tableData(end-n+1:end,1)';
-        data.parameters.peakPosLower = tableData(end-n+1:end,2)';
-        data.parameters.peakPosUpper = tableData(end-n+1:end,3)';
-        data.parameters.dampingCoeffs = tableData(n+1:2*n,1)';
-        data.parameters.dampingCoeffsLower = tableData(n+1:2*n,2)';
-        data.parameters.dampingCoeffsUpper = tableData(n+1:2*n,3)';
-        data.parameters.oscStrength = tableData(1:n,1)';
-        data.parameters.oscStrengthLower = tableData(1:n,2)';
-        data.parameters.oscStrengthUpper = tableData(1:n,3)';
-        data.parameters.nonResonant = tableData(2*n+1,1)';
-        data.parameters.nonResonantLower = tableData(2*n+1,2)';
-        data.parameters.nonResonantUpper = tableData(2*n+1,3)';
-
-        data.parameters.offset = tableData(2*n+2,1)';
-        data.parameters.offsetLower = tableData(2*n+2,2)';
-        data.parameters.offsetUpper = tableData(2*n+2,3)';
-
-        updateCoefficients( gui.Spectra.Value )
+%         tableDcata = gui.paramTable.Data;
+% 
+%         % Get number of peaks
+%         n = data.numPeaks;
+% 
+%         % Write values to data structure
+%         data.parameters.peakPos = tableData(end-n+1:end,1)';
+%         data.parameters.peakPosLower = tableData(end-n+1:end,2)';
+%         data.parameters.peakPosUpper = tableData(end-n+1:end,3)';
+%         data.parameters.dampingCoeffs = tableData(n+1:2*n,1)';
+%         data.parameters.dampingCoeffsLower = tableData(n+1:2*n,2)';
+%         data.parameters.dampingCoeffsUpper = tableData(n+1:2*n,3)';
+%         data.parameters.oscStrength = tableData(1:n,1)';
+%         data.parameters.oscStrengthLower = tableData(1:n,2)';
+%         data.parameters.oscStrengthUpper = tableData(1:n,3)';
+%         data.parameters.nonResonant = tableData(2*n+1,1)';
+%         data.parameters.nonResonantLower = tableData(2*n+1,2)';
+%         data.parameters.nonResonantUpper = tableData(2*n+1,3)';
+% 
+%         data.parameters.offset = tableData(2*n+2,1)';
+%         data.parameters.offsetLower = tableData(2*n+2,2)';
+%         data.parameters.offsetUpper = tableData(2*n+2,3)';
+% 
+%         updateCoefficients( gui.Spectra.Value )
     end
 
     function updateCoefficients(spectrumIndex)
 
-        if ~isfield( data,'parameters' )
-            return
-        end
-
-        % Calculate Oscillator Strength Parameters
-        if gui.Check_autoCalcA.Value
-            % If automatic calculation of oscillator strengths is selected
-
-            % Find index number of each Start Point of the peak frequencies
-            idx = zeros(1,data.numPeaks);
-            for i=1:data.numPeaks
-                [~, idx(i)] = min( abs( data.spectraData.DataSet(spectrumIndex).wavenumber - ...
-                    data.parameters.peakPos(i) ));
-            end
-
-            % Mumbo Jumbo
-            data.parameters.oscStrength = ...
-                ((data.parameters.dampingCoeffs - data.laserBandwidth).* ...
-                sqrt(data.spectraData.DataSet(spectrumIndex).signal(idx)) + ...
-                (data.parameters.dampingCoeffs - data.laserBandwidth) * ...
-                data.parameters.nonResonant);
-            data.parameters.oscStrengthLower = ...
-                data.parameters.oscStrength - data.parameters.oscStrength*2;
-            data.parameters.oscStrengthUpper = ...
-                data.parameters.oscStrength + data.parameters.oscStrength*2;
-
-        end
-
-        data.fitOpts.StartPoint = [data.parameters.oscStrength, ...
-            data.parameters.dampingCoeffs, ...
-            data.parameters.nonResonant, ...
-            data.parameters.offset, ...
-            data.parameters.peakPos];
-        data.fitOpts.Lower = [data.parameters.oscStrengthLower, ...
-            data.parameters.dampingCoeffsLower, ...
-            data.parameters.nonResonantLower, ...
-            data.parameters.offsetLower, ...
-            data.parameters.peakPosLower];
-        data.fitOpts.Upper = [data.parameters.oscStrengthUpper, ...
-            data.parameters.dampingCoeffsUpper, ...
-            data.parameters.nonResonantUpper, ...
-            data.parameters.offsetUpper, ...
-            data.parameters.peakPosUpper];
+%         if ~isfield( data,'parameters' )
+%             return
+%         end
+% 
+%         % Calculate Oscillator Strength Parameters
+%         if gui.Check_autoCalcA.Value
+%             % If automatic calculation of oscillator strengths is selected
+% 
+%             % Find index number of each Start Point of the peak frequencies
+%             idx = zeros(1,data.numPeaks);
+%             for i=1:data.numPeaks
+%                 [~, idx(i)] = min( abs( data.spectraData.DataSet(spectrumIndex).wavenumber - ...
+%                     data.parameters.peakPos(i) ));
+%             end
+% 
+%             % Mumbo Jumbo
+%             data.parameters.oscStrength = ...
+%                 ((data.parameters.dampingCoeffs - data.laserBandwidth).* ...
+%                 sqrt(data.spectraData.DataSet(spectrumIndex).signal(idx)) + ...
+%                 (data.parameters.dampingCoeffs - data.laserBandwidth) * ...
+%                 data.parameters.nonResonant);
+%             data.parameters.oscStrengthLower = ...
+%                 data.parameters.oscStrength - data.parameters.oscStrength*2;
+%             data.parameters.oscStrengthUpper = ...
+%                 data.parameters.oscStrength + data.parameters.oscStrength*2;
+% 
+%         end
+% 
+        data.fitOpts.StartPoint = gui.paramTable.Data(:,1);
+        data.fitOpts.Lower = gui.paramTable.Data(:,2);
+        data.fitOpts.Upper = gui.paramTable.Data(:,3);
 
         % Update Table
-        drawTable();
-
+%         drawTable();
+% 
     end
 
     function showCoeffs()

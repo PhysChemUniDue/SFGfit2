@@ -1,0 +1,1 @@
+Offset+abs(NR*exp(1i*epsilon)+A01/(w01-x-1i*G01)*exp(1i*phi))^2
