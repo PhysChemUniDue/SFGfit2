@@ -1,0 +1,1 @@
+Offset + abs((a1*A1)/(-1i*(g1+dg1) - x + w1+dw1) + ((A1+b1)*a2)/(-1i*(g2+dg2) - x + w2+dw2))^2 - abs(A1/(-1i*g1 - x + w1) + (A1+b1)/(-i*g2 - x + w2))^2

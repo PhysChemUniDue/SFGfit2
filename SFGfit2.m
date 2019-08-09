@@ -134,6 +134,9 @@ updateInterface();
             uimenu( gui.ImportMenu, ...
                 'Label', 'Import JSON File ...', ...
                 'Callback', @onImportJSON );
+            uimenu( gui.ImportMenu, ...
+                'Label', 'CSV File ...', ...
+                'Callback', @onImportCSV );
         gui.ExportMenu = uimenu( gui.FileMenu, ...
             'Label', 'Export', ...
             'Separator', 'on' );
@@ -739,7 +742,7 @@ updateInterface();
     function onBatchFit( ~, ~ )
 
         % Get number of spectra to fit
-        spectraIdx = 1:numel( data.spectraData.DataSet );
+        spectraIdx = gui.Spectra.Value;
 
         % Start fit
         startFit( spectraIdx );
@@ -1123,6 +1126,46 @@ updateInterface();
 
 
 %%%-----------------------------------------------------------------
+%%% Import CSV File (Wavenumber, Signal)
+%%%-----------------------------------------------------------------
+    function onImportCSV( ~, ~ )
+        disp('Importing CSV ...')
+        
+        % Open get file dialog
+        [fileName,pathName,filterindex] = uigetfile(...
+            [data.lastFolder,'/*'],...
+            'Choose File to Import',...
+            'MultiSelect','off');
+
+        % If user presses 'Cancel'
+        if filterindex == 0
+            return
+        end
+
+        dlmdata = dlmread([pathName, fileName]);
+
+        DataSet = struct();
+        DataSet.wavenumber = dlmdata(:,1);
+        DataSet.signal     = dlmdata(:,2);
+        DataSet.name       = fileName;
+        DataSet.wavelength = 1e7 ./ DataSet.wavenumber;
+        
+        if numel( data.spectraData.DataSet ) < 1
+            data.spectraData.DataSet = DataSet;
+        else
+            % Put new spectra at the end of the data set
+            data.spectraData.DataSet = [data.spectraData.DataSet, DataSet];
+        end
+
+        updateInterface();
+        onDataSelect();
+        fprintf( '\n\tDone.\n' )
+
+    end
+
+
+
+%%%-----------------------------------------------------------------
 %%% Export Fit Parameters as CSV File
 %%%-----------------------------------------------------------------
 
@@ -1199,6 +1242,12 @@ updateInterface();
         xvals = linspace(min(wavenumbers), max(wavenumbers), n);
         values(:,2*i-1) = xvals;
         values(:,2*i) = DataSet(i).fitresult(xvals);
+    end
+    
+    for i = 1:length(header)
+        header{i} = replace(header{i}, '.csv', '');
+        header{i} = replace(header{i}, '.', '');
+        header{i} = replace(header{i}, '+', 'plus');
     end
 
     T = array2table(values, 'VariableNames', header);
@@ -1277,11 +1326,36 @@ updateInterface();
 
         % Get selected spectra
         values = gui.Spectra.Value;
+        DataSet = data.spectraData.DataSet(values);
+        
+        num_coeffs = numel( coeffvalues( DataSet(1).fitresult ));
+        cn = coeffnames(DataSet(1).fitresult);
+        
+        coeff_mat = zeros(length(DataSet), num_coeffs);
 
-        for i=1:numel( values )
-            disp( data.spectraData.DataSet(i).name )
-            disp( data.spectraData.DataSet(i).settings )
+        for j = 1:numel( DataSet )
+            coeffs = coeffvalues( DataSet(j).fitresult )
+            coeff_mat(j,:) = coeffs;
         end
+        
+        coeff_mat
+        
+        for j = 1:num_coeffs
+            m = mean(coeff_mat(:,j));
+            mx = max(coeff_mat(:,j));
+            mn = min(coeff_mat(:,j));
+            
+            disp(cn{j})
+            fprintf('Mean: %.5f\nMax:  %.5f\nMin:  %.5f\n', m, mx, mn)
+        end
+        
+        h1 = figure();
+        for j = 1:num_coeffs
+            subplot(ceil(sqrt(num_coeffs)), ceil(sqrt(num_coeffs)), j)
+            plot(coeff_mat(:,j), 'o-')
+            title(cn{j})
+        end
+        
 
     end
 
