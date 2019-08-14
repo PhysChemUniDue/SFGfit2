@@ -1,6 +1,5 @@
 function SFGfit2()
 %
-%
 %   Open a GUI for batch-fitting spectra
 %
 
@@ -1145,11 +1144,12 @@ updateInterface();
         dlmdata = dlmread([pathName, fileName]);
 
         DataSet = struct();
-        DataSet.wavenumber = dlmdata(:,1);
-        DataSet.signal     = dlmdata(:,2);
-        DataSet.name       = fileName;
-        DataSet.wavelength = 1e7 ./ DataSet.wavenumber;
-        
+        for i=2:size(dlmdata,2)
+                DataSet(i-1).wavenumber = dlmdata(:,1);
+                DataSet(i-1).signal     = dlmdata(:,i);
+                DataSet(i-1).name       = num2str(i-1);
+                DataSet(i-1).wavelength = 1e7 ./ DataSet(i-1).wavenumber;
+        end
         if numel( data.spectraData.DataSet ) < 1
             data.spectraData.DataSet = DataSet;
         else
@@ -1232,12 +1232,13 @@ updateInterface();
     
     value = get(gui.Spectra, 'Value');
 
-    values = zeros(n, 2*numel(value));
-    header = cell(1, 2*numel(value));
+        values = zeros(n, 2*numel(value));
+        header = cell(1, 2*numel(value));
 
     for i=1:numel( value )
-        header{2*i - 1} = strip(['wavenumber_' DataSet(i).name]);
-        header{2*i} = strip(['fitvalues_' DataSet(i).name]);
+        DataSet(i).name
+        header{2*i - 1} = strip(['wavenumber_',DataSet(i).name]);
+        header{2*i} = strip(['fitvalues_',DataSet(i).name]);
         wavenumbers = DataSet(i).wavenumber;
         xvals = linspace(min(wavenumbers), max(wavenumbers), n);
         values(:,2*i-1) = xvals;
